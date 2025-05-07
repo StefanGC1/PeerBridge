@@ -5,47 +5,53 @@
 #include <iostream>
 #include <string>
 
+typedef WINTUN_ADAPTER_HANDLE (*WintunOpenAdapterFunc)(const WCHAR*);
 typedef WINTUN_ADAPTER_HANDLE (*WintunCreateAdapterFunc)(const WCHAR*, const WCHAR*, GUID*);
 typedef DWORD (*WintunGetLastErrorFunc)();
 
 bool TunInterface::initialize(const std::string& deviceName) {
-    // Load wintun.dll
+    // Load wintun.dll dynamically
     HMODULE wintunModule = LoadLibrary("wintun.dll");
     if (!wintunModule) {
         std::cerr << "Failed to load wintun.dll" << std::endl;
         return false;
     }
 
-    // Retrieve the WintunCreateAdapter function
+    // Retrieve the WintunOpenAdapter and WintunCreateAdapter functions
+    WintunOpenAdapterFunc WintunOpenAdapter = 
+        (WintunOpenAdapterFunc)GetProcAddress(wintunModule, "WintunOpenAdapter");
     WintunCreateAdapterFunc WintunCreateAdapter = 
         (WintunCreateAdapterFunc)GetProcAddress(wintunModule, "WintunCreateAdapter");
-    if (!WintunCreateAdapter) {
-        std::cerr << "Failed to load WintunCreateAdapter function" << std::endl;
+
+    if (!WintunOpenAdapter || !WintunCreateAdapter) {
+        std::cerr << "Failed to load Wintun functions" << std::endl;
         FreeLibrary(wintunModule);
         return false;
     }
 
     // Convert deviceName to wide string
     std::wstring wideDeviceName(deviceName.begin(), deviceName.end());
-    WINTUN_ADAPTER_HANDLE adapter = WintunCreateAdapter(wideDeviceName.c_str(), L"Wintun", NULL);
-    if (!adapter) {
-        // Check for last error
-        DWORD error = GetLastError();
-        std::cerr << "Failed to create WinTun adapter. Error code: " << error << std::endl;
 
-        FreeLibrary(wintunModule);
-        return false;
+    // Attempt to open an existing adapter first
+    WINTUN_ADAPTER_HANDLE adapter = WintunOpenAdapter(wideDeviceName.c_str());
+    if (!adapter) {
+        std::cerr << "Adapter not found; attempting to create a new one" << std::endl;
+        adapter = WintunCreateAdapter(wideDeviceName.c_str(), L"Wintun", NULL);
+
+        if (!adapter) {
+            std::cerr << "Failed to create WinTun adapter; please run as Administrator for setup" << std::endl;
+            FreeLibrary(wintunModule);
+            return false;
+        }
     }
 
     this->adapter = adapter;
-    std::cout << "WinTun adapter created successfully." << std::endl;
+    std::cout << "WinTun adapter initialized successfully. Waiting for input..." << std::endl;
 
-    int logic = 0;
-    std::cin >> logic;
+    std::string input;
+    std::cin >> input;
 
     FreeLibrary(wintunModule);
-    free(adapter);
-
     return true;
 }
 

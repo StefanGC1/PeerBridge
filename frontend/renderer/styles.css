@@ -20,6 +20,7 @@ input, button {
     left: 0;
     top: 0;
     margin: 20px 0 0 20px;
+    font-size: 0.8rem;
 }
 
 #rand-num {

@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:latest
+    container_name: redis_container
+    ports:
+      - "6379:6379"
+
+  flask:
+    build: .
+    container_name: flask_container
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SQLITE_DB_PATH=/app/data/my_database.db
+
+volumes:
+  sqlite_data:
