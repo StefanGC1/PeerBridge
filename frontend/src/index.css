@@ -1,0 +1,195 @@
+/* Import Tailwind directives */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Theme definition using CSS variables */
+@theme {
+  /* Light mode (default) */
+  --color-primary: rgb(91 33 182); /* Purple */
+  --color-primary-foreground: rgb(250 245 255); /* Light text on purple */
+  --color-secondary: rgb(67 56 202); /* Indigo */
+  --color-secondary-foreground: rgb(238 242 255); /* Light text on indigo */
+  --color-accent: rgb(99 102 241); /* Accent color */
+  --color-accent-foreground: rgb(238 242 255); /* Light text on accent */
+  --color-background: rgb(255 255 255); /* White background */
+  --color-foreground: rgb(17 24 39); /* Dark text */
+  --color-card: rgb(255 255 255); /* Card background */
+  --color-card-foreground: rgb(17 24 39); /* Card text */
+  --color-border: rgb(226 232 240); /* Border color */
+  --color-ring: rgb(91 33 182); /* Focus ring color (purple) */
+  --color-input: rgb(226 232 240); /* Input background */
+  --color-muted: rgb(241 245 249); /* Muted background */
+  --color-muted-foreground: rgb(100 116 139); /* Muted text */
+  
+  /* Border radius */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  
+  /* Transitions */
+  --transition-all: all 0.3s ease-linear;
+}
+
+/* Dark mode */
+@custom-variant dark {
+  @theme {
+    --color-primary: rgb(91 33 182); /* Purple */
+    --color-primary-foreground: rgb(250 245 255); /* Light text on purple */
+    --color-secondary: rgb(67 56 202); /* Indigo */
+    --color-secondary-foreground: rgb(238 242 255); /* Light text on indigo */
+    --color-accent: rgb(99 102 241); /* Accent color */
+    --color-accent-foreground: rgb(238 242 255); /* Light text on accent */
+    --color-background: rgb(15 23 42); /* Dark background */
+    --color-foreground: rgb(248 250 252); /* Light text */
+    --color-card: rgb(30 41 59); /* Card background */
+    --color-card-foreground: rgb(248 250 252); /* Card text */
+    --color-border: rgb(51 65 85); /* Border color */
+    --color-ring: rgb(147 51 234); /* Focus ring */
+    --color-input: rgb(51 65 85); /* Input background */
+    --color-muted: rgb(51 65 85); /* Muted background */
+    --color-muted-foreground: rgb(148 163 184); /* Muted text */
+  }
+}
+
+/* Global styles */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* html,
+  body,
+  #root {
+    overflow: hidden !important;
+  } */
+}
+
+/* Custom utility classes */
+@layer components {
+  .btn-primary {
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    transition: opacity 0.2s ease;
+  }
+  
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  
+  .btn-secondary {
+    background-color: var(--color-secondary);
+    color: var(--color-secondary-foreground);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    transition: opacity 0.2s ease;
+  }
+  
+  .btn-secondary:hover {
+    opacity: 0.9;
+  }
+  
+  .sidebar-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 3rem;
+    width: 3rem;
+    margin: 0.5rem auto;
+    background-color: var(--color-background);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: var(--transition-all);
+    cursor: pointer;
+  }
+  
+  .sidebar-icon:hover {
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-radius: var(--radius-2xl);
+  }
+  
+  .sidebar-tooltip {
+    position: absolute;
+    width: auto;
+    padding: 0.5rem;
+    margin: 0.5rem;
+    min-width: max-content;
+    left: 3.5rem;
+    border-radius: var(--radius-md);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-size: 0.75rem;
+    font-weight: bold;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.1s ease;
+    transform: scale(0);
+    transform-origin: left;
+  }
+  
+  .sidebar-icon:hover .sidebar-tooltip {
+    transform: scale(1);
+  }
+  
+  .sidebar-hr {
+    background-color: var(--color-border);
+    margin: 0 0.5rem;
+    border-radius: 9999px;
+  }
+  
+  .input-field {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-input);
+    background-color: var(--color-background);
+    transition: all 0.2s ease;
+  }
+  
+  .input-field:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-ring);
+  }
+  
+  .card {
+    background-color: var(--color-card);
+    color: var(--color-card-foreground);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    padding: 1rem;
+  }
+}
+
+/* Manual dark mode class for explicit toggling */
+.dark {
+  --color-primary: rgb(91 33 182); /* Purple */
+  --color-primary-foreground: rgb(250 245 255); /* Light text on purple */
+  --color-secondary: rgb(67 56 202); /* Indigo */
+  --color-secondary-foreground: rgb(238 242 255); /* Light text on indigo */
+  --color-accent: rgb(99 102 241); /* Accent color */
+  --color-accent-foreground: rgb(238 242 255); /* Light text on accent */
+  --color-background: rgb(15 23 42); /* Dark background */
+  --color-foreground: rgb(248 250 252); /* Light text */
+  --color-card: rgb(30 41 59); /* Card background */
+  --color-card-foreground: rgb(248 250 252); /* Card text */
+  --color-border: rgb(51 65 85); /* Border color */
+  --color-ring: rgb(147 51 234); /* Focus ring */
+  --color-input: rgb(51 65 85); /* Input background */
+  --color-muted: rgb(51 65 85); /* Muted background */
+  --color-muted-foreground: rgb(148 163 184); /* Muted text */
+}

@@ -10,7 +10,7 @@ COPY . .
 
 # Environment for Flask CLI ( UNUSED )
 # ENV FLASK_APP=app
-# ENV FLASK_ENV=development
+ENV FLASK_ENV=development
 
 # Expose port
 EXPOSE 5000

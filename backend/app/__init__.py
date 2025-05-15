@@ -1,11 +1,20 @@
+import logging
 import os
 from flask import Flask
-from .extensions import db, migrate, socketio, jwt
+from .extensions import db, migrate, socketio, jwt, cors
 from .routes import bp as api_bp
 
 
 def create_app():
     app = Flask(__name__)
+
+    # Dev / prod mode
+    app.config['ENV'] = os.getenv('FLASK_ENV', 'development')
+    if app.config['ENV'] == 'development':
+        app.config['DEBUG'] = True
+
+        app.logger.setLevel(logging.DEBUG)
+        app.logger.debug('Running in development mode')
 
     # Config
     db_path = os.getenv('SQLITE_DB_PATH', 'data/my_database.db')
@@ -20,7 +29,9 @@ def create_app():
     migrate.init_app(app, db)
     socketio.init_app(app, cors_allowed_origins="*")
     jwt.init_app(app)
+    cors.init_app(app, supports_credentials=True)
 
+    from . import sockets
     # Redis setup
     from redis import Redis
     app.redis_client = Redis(

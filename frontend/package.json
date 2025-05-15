@@ -1,18 +1,59 @@
 {
-  "name": "peerbridge-frontend",
+  "name": "frontend",
   "version": "1.0.0",
-  "description": "Frontend for the app PeerBridge",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "Crisan George-Stefan",
+  "description": "",
   "license": "ISC",
-  "devDependencies": {
-    "electron": "^33.0.2"
+  "author": "",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "electron .",
+    "dev:concurrently": "node scripts/dev-concurrent.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "electron .",
+    "package": "npm run build && electron-builder build --publish never"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.2",
+    "axios": "^1.9.0",
+    "electron-is-dev": "^3.0.1",
+    "lucide-react": "^0.509.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.0",
     "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/vite": "^4.1.6",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron": "^36.2.0",
+    "electron-builder": "^26.0.12",
+    "tailwindcss": "^4.1.6",
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.yourname.p2papp",
+    "productName": "P2P App",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "deb"
+    }
   }
 }
