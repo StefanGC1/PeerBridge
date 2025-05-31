@@ -16,6 +16,8 @@
     "package": "npm run build && electron-builder build --publish never"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.7.15",
     "@headlessui/react": "^2.2.2",
     "axios": "^1.9.0",
     "electron-is-dev": "^3.0.1",
