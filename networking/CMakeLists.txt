@@ -1,82 +1,103 @@
 cmake_minimum_required(VERSION 3.10)
-project(BoostTestProject)
+project(peerbridgenetworking)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-#Detect the platform
-if (WIN32)
-    message(STATUS "Compiling on Windows")
+find_package(Boost REQUIRED COMPONENTS system filesystem thread)
 
-    if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(WIN_ARCH "win64")
-        message(STATUS "Using 64-bit libraries")
-    else()
-        set(WIN_ARCH "win32")
-        message(STATUS "Using 32-bit libraries")
-    endif()
-    
-    set(WINTUN_DIR "${CMAKE_SOURCE_DIR}/external/wintun")
-    message(STATUS "Wintun Path: ${WINTUN_DIR}")
-    include_directories("${WINTUN_DIR}/include")
-elseif (UNIX)
-    message(STATUS "Compiling on Linux")
-    find_package(Threads REQUIRED)
-endif()
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSODIUM REQUIRED libsodium)
+pkg_check_modules(OPENSSL REQUIRED openssl)
+pkg_check_modules(ZLIB REQUIRED zlib)
 
-# Set the path where Boost is installed
-set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/external/boost")
-set(BOOST_INCLUDEDIR "${BOOST_ROOT}/include/boost-1_87")
-set(BOOST_LIBRARYDIR "${BOOST_ROOT}/lib")
+set(NLOHMANN_INCLUDEDIR "${CMAKE_SOURCE_DIR}/external/nlohmann/include")
 
-# Set Libsodium Paths
-set(SODIUM_ROOT "${CMAKE_SOURCE_DIR}/external/libsodium-${WIN_ARCH}")
-set(SODIUM_INCLUDEDIR "${SODIUM_ROOT}/include")
-set(SODIUM_LIBRARYDIR "${SODIUM_ROOT}/lib")
+set(IXWS_ROOT "${CMAKE_SOURCE_DIR}/external/ixwebsocket")
+set(IXWS_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external/ixwebsocket/include")
+set(IXWS_LIBRARY "${CMAKE_SOURCE_DIR}/external/ixwebsocket/lib/libixwebsocket.a")
 
-message(STATUS "Libsodium Include Path: ${SODIUM_INCLUDEDIR}")
-message(STATUS "Libsodium Library Path: ${SODIUM_LIBRARYDIR}")
+set(WINTUN_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/wintun/include")
+message(STATUS "wintun: ${WINTUN_INCLUDE_DIR}")
+set(WINTUN_DLL_DIR "${CMAKE_SOURCE_DIR}/wintun/bin")
 
-# Project specific source and header files
+include_directories(${IXWS_INCLUDE_DIRS})
+link_directories(${IXWS_ROOT}/lib)
+
+include_directories(${WINTUN_INCLUDE_DIR})
+
+# Project source and header files
 include_directories("${CMAKE_SOURCE_DIR}/include")
 set(SOURCES
     src/main.cpp
+    src/crypto.cpp
+    src/networking.cpp
+    src/signaling.cpp
+    src/stun.cpp
+    src/p2p_system.cpp
     src/tun_interface.cpp
 )
 
 # Create executable
-add_executable(BoostTestProject ${SOURCES})
+add_executable(peerbridgenetworking ${SOURCES})
 
 # Include directories
-target_include_directories(BoostTestProject PRIVATE
-    ${BOOST_INCLUDEDIR}
-    ${SODIUM_INCLUDEDIR})
-
-# Link Boost libraries directory
-target_link_directories(BoostTestProject PRIVATE ${BOOST_LIBRARYDIR})
-target_link_directories(BoostTestProject PRIVATE ${SODIUM_LIBRARYDIR})
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(BOOST_SUFFIX "-mt-d")   # Use Debug version
-else()
-    set(BOOST_SUFFIX "-mt")     # Use Release version
-endif()
-
-# Link boost libraries
-target_link_libraries(BoostTestProject PRIVATE
-    "${BOOST_LIBRARYDIR}/libboost_system-mgw14${BOOST_SUFFIX}-x64-1_87.a"
-    "${BOOST_LIBRARYDIR}/libboost_filesystem-mgw14${BOOST_SUFFIX}-x64-1_87.a"
-    "${SODIUM_LIBRARYDIR}/libsodium.a"
-    ws2_32
+target_include_directories(peerbridgenetworking PRIVATE
+    ${Boost_INCLUDE_DIRS}
+    ${LIBSODIUM_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${JSONCPP_INCLUDE_DIRS}
+    ${NLOHMANN_INCLUDEDIR}
 )
 
-# WINTUN linking
-if(WIN32)
-    add_custom_command(TARGET BoostTestProject POST_BUILD
+# Link libraries
+target_link_libraries(peerbridgenetworking PRIVATE
+    ${Boost_LIBRARIES}
+    ${LIBSODIUM_LIBRARIES}
+    ${IXWS_LIBRARY}
+    ${OPENSSL_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+    ws2_32
+    mswsock
+    crypt32
+    iphlpapi
+)
+
+# Copy Wintun driver dll to build dir
+add_custom_command(TARGET peerbridgenetworking POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${WINTUN_DIR}/bin/wintun.dll"
-            $<TARGET_FILE_DIR:BoostTestProject>
+            "${WINTUN_DLL_DIR}/wintun.dll"
+            $<TARGET_FILE_DIR:peerbridgenetworking>
     )
-elseif(UNIX)
-    target_link_libraries(BoostTestProject Threads::Threads)
+
+target_compile_definitions(peerbridgenetworking PRIVATE IXWEBSOCKET_USE_TLS)
+
+#### POST-BUILD PACKAGING ####
+
+option(ENABLE_DEP_COPY "Copy DLL dependencies to release folder and generate ZIP" OFF)
+
+if(ENABLE_DEP_COPY)
+    # Copy dependencies automatically
+    add_custom_target(copy_deps ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DTARGET_EXE=$<TARGET_FILE:peerbridgenetworking>
+            -P "${CMAKE_SOURCE_DIR}/copy_deps.cmake"
+        BYPRODUCTS "${CMAKE_BINARY_DIR}/release/peerbridgenetworking.exe"
+        VERBATIM
+    )
+    add_dependencies(copy_deps peerbridgenetworking)
+
+    # Install step: include the release folder contents in the package
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/release/" DESTINATION .)
+
+    # Package config (CPack ZIP)
+    include(InstallRequiredSystemLibraries)
+    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_PACKAGE_NAME "peerbridgenetworking")
+    set(CPACK_PACKAGE_VERSION "1.0.0")
+    set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+    set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/package")
+    include(CPack)
 endif()

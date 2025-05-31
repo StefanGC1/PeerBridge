@@ -1,0 +1,6 @@
+cmake .. -G "MinGW Makefiles" -DENABLE_DEP_COPY=ON
+mingw32-make
+cpack
+
+
+cmake --build . --target package
