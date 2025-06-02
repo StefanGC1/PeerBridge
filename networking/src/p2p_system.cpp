@@ -56,24 +56,24 @@ bool P2PSystem::initialize(const std::string& server_url, const std::string& use
     username_ = username;
     running_ = true;
     
-    // Set up callbacks for signaling
-    signaling_.setConnectCallback([this](bool connected) {
-        if (connected) {
-            this->signaling_.sendGreeting();
-        }
-    });
-    
-    signaling_.setChatRequestCallback([this](const std::string& from) {
-        this->handleConnectionRequest(from);
-    });
-    
-    signaling_.setPeerInfoCallback([this](const std::string& username, const std::string& ip, int port) {
-        this->handlePeerInfo(username, ip, port);
-    });
-    
-    signaling_.setChatInitCallback([this](const std::string& username, const std::string& ip, int port) {
-        this->handleConnectionInit(username, ip, port);
-    });
+    // Set up callbacks for signaling - REMOVED
+    // signaling_.setConnectCallback([this](bool connected) {
+    //     if (connected) {
+    //         this->signaling_.sendGreeting();
+    //     }
+    // });
+    // 
+    // signaling_.setChatRequestCallback([this](const std::string& from) {
+    //     this->handleConnectionRequest(from);
+    // });
+    // 
+    // signaling_.setPeerInfoCallback([this](const std::string& username, const std::string& ip, int port) {
+    //     this->handlePeerInfo(username, ip, port);
+    // });
+    // 
+    // signaling_.setChatInitCallback([this](const std::string& username, const std::string& ip, int port) {
+    //     this->handleConnectionInit(username, ip, port);
+    // });
 
     // Discover public address for NAT traversal
     if (!discoverPublicAddress()) {
@@ -113,13 +113,13 @@ bool P2PSystem::initialize(const std::string& server_url, const std::string& use
         this->handlePacketFromTun(packet);
     });
     
-    // Connect to signaling server
-    if (!signaling_.connect(server_url)) {
-        if (on_status_) {
-            on_status_("Failed to connect to signaling server");
-        }
-        return false;
-    }
+    // Connect to signaling server - REMOVED
+    // if (!signaling_.connect(server_url)) {
+    //     if (on_status_) {
+    //         on_status_("Failed to connect to signaling server");
+    //     }
+    //     return false;
+    // }
     
     // Start UDP network
     if (!network_->startListening(local_port)) {
@@ -129,8 +129,8 @@ bool P2PSystem::initialize(const std::string& server_url, const std::string& use
         return false;
     }
 
-    // Register with the signaling server
-    signaling_.registerUser(username_, public_ip_, public_port_);
+    // Register with the signaling server - REMOVED
+    // signaling_.registerUser(username_, public_ip_, public_port_);
 
     if (on_status_) {
         on_status_("P2P System initialized successfully");
@@ -167,10 +167,10 @@ bool P2PSystem::connectToPeer(const std::string& peer_username) {
     is_host_ = false;
     
     // Request peer info from signaling server
-    signaling_.requestPeerInfo(peer_username);
+    // signaling_.requestPeerInfo(peer_username);
     
     // Request connection
-    signaling_.sendChatRequest(peer_username);
+    // signaling_.sendChatRequest(peer_username);
     
     if (on_status_) {
         on_status_("Sent connection request to " + peer_username);
@@ -192,7 +192,7 @@ void P2PSystem::disconnect() {
     
     // Disconnect from peer
     network_->disconnect();
-    signaling_.disconnect();
+    // signaling_.disconnect(); // REMOVED
     
     peer_username_ = "";
     pending_request_from_ = "";
@@ -225,7 +225,7 @@ void P2PSystem::acceptIncomingRequest() {
     // We are the host
     is_host_ = true;
     
-    signaling_.acceptChatRequest();
+    // signaling_.acceptChatRequest();
     if (on_status_) {
         on_status_("Accepted connection request from " + pending_request_from_);
     }
@@ -242,7 +242,7 @@ void P2PSystem::rejectIncomingRequest() {
         return;
     }
     
-    signaling_.declineChatRequest();
+    // signaling_.declineChatRequest();
     if (on_status_) {
         on_status_("Rejected connection request from " + pending_request_from_);
     }
@@ -416,9 +416,7 @@ bool P2PSystem::setupVirtualInterface() {
 void P2PSystem::handleConnectionRequest(const std::string& from) {
     pending_request_from_ = from;
     
-    if (on_connection_request_) {
-        on_connection_request_(from);
-    }
+    // signaling_.handleConnectionRequest(from);
 }
 
 void P2PSystem::handlePeerInfo(const std::string& username, const std::string& ip, int port) {
@@ -601,4 +599,13 @@ void P2PSystem::setConnectionCallback(ConnectionCallback callback) {
 
 void P2PSystem::setConnectionRequestCallback(ConnectionRequestCallback callback) {
     on_connection_request_ = std::move(callback);
+}
+
+// Add getters for public IP and port
+std::string P2PSystem::getPublicIP() const {
+    return public_ip_;
+}
+
+int P2PSystem::getPublicPort() const {
+    return public_port_;
 } 

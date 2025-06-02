@@ -11,6 +11,7 @@
     "dev:electron": "electron .",
     "dev:concurrently": "node scripts/dev-concurrent.js",
     "build": "vite build",
+    "grpc:generate": "mkdirp generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --proto_path=proto proto/peerbridge.proto",
     "preview": "vite preview",
     "start": "electron .",
     "package": "npm run build && electron-builder build --publish never"
@@ -25,7 +26,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "sudo-prompt": "^9.2.1"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.10",
@@ -34,6 +36,8 @@
     "concurrently": "^9.1.2",
     "electron": "^36.2.0",
     "electron-builder": "^26.0.12",
+    "grpc-tools": "^1.13.0",
+    "mkdirp": "^3.0.1",
     "tailwindcss": "^4.1.6",
     "vite": "^6.3.5",
     "wait-on": "^8.0.3"

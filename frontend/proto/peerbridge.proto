@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package peerbridge;
+
+// Service definition for PeerBridge
+service PeerBridgeService {
+    // RPC to get STUN information (public IP and port)
+    rpc GetStunInfo (StunInfoRequest) returns (StunInfoResponse);
+    // We will define other RPC methods here later
+}
+
+// Request message for GetStunInfo
+message StunInfoRequest {
+    // Could be empty if no parameters are needed from client for this call
+}
+
+// Response message for GetStunInfo
+message StunInfoResponse {
+    string public_ip = 1;
+    int32 public_port = 2;
+    string error_message = 3; // In case of an error fetching STUN info
+} 

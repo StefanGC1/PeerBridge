@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
-const { setupIpcHandlers } = require('./ipc-handlers');
+const { spawn } = require('child_process');
+const grpcModule = require('./grpc');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 // if (require('electron-squirrel-startup')) {
@@ -40,11 +41,16 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   
-  // Set up IPC handlers for communication with the frontend
-  //   setupIpcHandlers(ipcMain);
+  // Initialize networking and gRPC
+  try {
+    await grpcModule.initializeNetworking();
+    console.log('Networking module initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize networking module:', error);
+  }
   
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -53,8 +59,26 @@ app.whenReady().then(() => {
   });
 });
 
+// Handle IPC events
+ipcMain.handle('grpc:getStunInfo', async () => {
+  try {
+    const stunInfo = await grpcModule.getStunInfo();
+    return stunInfo;
+  } catch (error) {
+    console.error('Error in getStunInfo:', error);
+    return { error: error.message || 'Failed to get STUN info' };
+  }
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    // Clean up the networking module
+    grpcModule.cleanup();
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  // Ensure cleanup happens before quitting
+  grpcModule.cleanup();
 });

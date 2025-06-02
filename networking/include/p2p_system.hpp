@@ -1,5 +1,4 @@
 #pragma once
-#include "signaling.hpp"
 #include "stun.hpp"
 #include "networking.hpp"
 #include "tun_interface.hpp"
@@ -34,6 +33,8 @@ public:
     bool isConnected() const;
     bool isRunning() const;
     bool isHost() const;
+    std::string getPublicIP() const;   // Getter for public IP
+    int getPublicPort() const;       // Getter for public port
     
     // Connection request handling
     void acceptIncomingRequest();
@@ -88,7 +89,6 @@ private:
     std::string peer_virtual_ip_;
     
     // Components
-    SignalingClient signaling_;
     StunClient stun_;
     std::unique_ptr<UDPNetwork> network_;
     std::unique_ptr<TunInterface> tun_;
