@@ -32,6 +32,16 @@ def login():
     data = request.get_json() or {}
     username = data.get('username')
     password = data.get('password')
+    
+    # Get STUN info from request with better error handling
+    try:
+        user_ip = data.get('public_ip', '1.1.1.1')  # Default if not provided
+        user_port = int(data.get('public_port', 12345))  # Convert to int and use default if not provided
+    except (ValueError, TypeError) as e:
+        # Handle case where port is not a valid integer
+        current_app.logger.warning(f"Invalid STUN port format: {e}. Using default.")
+        user_ip = data.get('public_ip', '1.1.1.1')
+        user_port = 12345  # Use default
 
     if not username or not password:
         return jsonify({'error': 'username and password required'}), 400
@@ -41,15 +51,16 @@ def login():
         return jsonify({'error': 'invalid username or password'}), 401
 
     user_id = user.id
-    # Placeholder data
-    user_ip = "1.1.1.1"
-    user_port = "12345"
     key = f"online:{user_id}"
+
+    # Print STUN info to console
+    current_app.logger.debug(f"User {username} (ID: {user_id}) logged in with STUN info - IP: {user_ip}, Port: {user_port}")
 
     # TODO: Move getting redis instance to separate function
     redis_inst = current_app.redis_client
 
-    redis_inst.hset(key, mapping={"ip": user_ip, "port": user_port})
+    # Store STUN info in Redis
+    redis_inst.hset(key, mapping={"ip": user_ip, "port": str(user_port)})  # Convert port to string for Redis
     # Set initial TTL - will be removed when user connects via websocket
     redis_inst.expire(key, 300)  # 5 minutes initial TTL
 

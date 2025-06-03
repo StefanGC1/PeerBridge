@@ -18,7 +18,7 @@ def handle_connect():
     emit('online_count', {'count': online_count})
 
 @socketio.on('disconnect')
-def handle_disconnect():
+def handle_disconnect(sid=None):
     current_app.logger.debug(f'Client disconnected: {request.sid}')
     # If user was authenticated, update their Redis TTL
     user_id = session.get('user_id')
@@ -27,6 +27,7 @@ def handle_disconnect():
         redis_inst = current_app.redis_client
         key = f"online:{user_id}"
         if redis_inst.exists(key):
+            # Set expiration
             redis_inst.expire(key, 60)
             current_app.logger.debug(f'Set TTL to 60s for user {user_id}')
         
@@ -52,6 +53,11 @@ def handle_authenticate(data):
         redis_inst = current_app.redis_client
         key = f"online:{user_id}"
         if redis_inst.exists(key):
+            # Get current STUN info before making changes
+            stun_info = redis_inst.hgetall(key)
+            current_app.logger.debug(f'User {user_id} authenticated with STUN info: {stun_info}')
+            
+            # Preserve the STUN info but remove expiration
             redis_inst.persist(key)  # Remove expiration, set to infinite TTL
             current_app.logger.debug(f'Set TTL to infinite for user {user_id}')
             emit('authenticated', {'message': 'Authentication successful'})
@@ -98,7 +104,7 @@ def _handle_leave_all_lobbies(user_id):
     for lobby_key in lobby_keys:
         lobby_data = json.loads(redis_inst.get(lobby_key))
         if user_id in lobby_data.get('members', []):
-            lobby_id = lobby_key.decode().split(':')[1]
+            lobby_id = lobby_key.split(':')[1]
             _remove_user_from_lobby(user_id, lobby_id)
     
     # Broadcast updated online count

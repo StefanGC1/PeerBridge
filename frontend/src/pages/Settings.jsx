@@ -44,7 +44,7 @@ function Settings() {
     <div className="h-full flex flex-col p-6">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       
-      <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+      <div className="shadow-md rounded-lg p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Network Information</h2>
         
         {stunInfo.loading ? (
@@ -67,7 +67,7 @@ function Settings() {
         )}
       </div>
 
-      <div className="bg-white shadow-md rounded-lg p-6">
+      <div className="shadow-md rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-4">About</h2>
         <p className="text-gray-600">PeerBridge v1.0.0</p>
         <p className="text-gray-600">Bachelor Thesis Project</p>

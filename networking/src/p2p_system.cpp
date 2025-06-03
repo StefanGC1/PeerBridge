@@ -1,5 +1,7 @@
 #include "p2p_system.hpp"
 #include "logger.hpp"
+#include "stun.hpp"
+#include "ipc.hpp"
 #include <iostream>
 #include <vector>
 #include <sstream>
@@ -74,6 +76,14 @@ bool P2PSystem::initialize(const std::string& server_url, const std::string& use
     // signaling_.setChatInitCallback([this](const std::string& username, const std::string& ip, int port) {
     //     this->handleConnectionInit(username, ip, port);
     // });
+
+    // Start IPC server
+    std::string ipc_server_address = "0.0.0.0:50051";
+    if (!startIPCServer(ipc_server_address)) {
+        std::cerr << "Failed to start IPC server. Exiting." << std::endl;
+        return 1;
+    }
+    clog << "IPC Server started on " << ipc_server_address << std::endl;
 
     // Discover public address for NAT traversal
     if (!discoverPublicAddress()) {
@@ -196,6 +206,9 @@ void P2PSystem::disconnect() {
     
     peer_username_ = "";
     pending_request_from_ = "";
+    
+    // Stop IPC server
+    stopIPCServer();
     
     if (on_status_) {
         on_status_("Disconnected");
@@ -608,4 +621,51 @@ std::string P2PSystem::getPublicIP() const {
 
 int P2PSystem::getPublicPort() const {
     return public_port_;
+}
+
+bool P2PSystem::startIPCServer(const std::string& server_address) {
+    // Create IPC server if it doesn't exist
+    if (!ipc_server_) {
+        ipc_server_ = std::make_unique<IPCServer>();
+        
+        // Set up callbacks
+        ipc_server_->setGetStunInfoCallback([this]() -> std::pair<std::string, int> {
+            return {this->public_ip_, this->public_port_};
+        });
+        
+        // Add shutdown callback
+        ipc_server_->setShutdownCallback([this](bool force) {
+            // Initiate process shutdown
+            if (force) {
+                // Force immediate exit
+                std::cout << "Force shutdown requested, exiting immediately" << std::endl;
+                exit(0);
+            } else {
+                // Graceful shutdown
+                std::cout << "Graceful shutdown requested" << std::endl;
+                
+                // Refactorize this
+                this->on_status_("Disconnected");
+                // Signal the main loop to exit
+                running_ = false;
+            }
+        });
+    }
+    
+    // Run the server in a separate thread
+    ipc_thread_ = std::thread([this, server_address]() {
+        ipc_server_->RunServer(server_address);
+    });
+    
+    return true;
+}
+
+void P2PSystem::stopIPCServer() {
+    if (ipc_server_) {
+        ipc_server_->ShutdownServer();
+        
+        if (ipc_thread_.joinable()) {
+            ipc_thread_.join();
+        }
+    }
 } 

@@ -29,16 +29,41 @@ function startNetworkingModule() {
       : path.join(process.resourcesPath, 'cpp/bin/PeerBridgeNet.exe');
 
     // Use sudo-prompt for elevated privileges
-    sudoPrompt.exec(`"${executablePath}"`, options, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Error starting network module:', error);
-        reject(error);
-        return;
-      }
+    // sudoPrompt.exec(`"${executablePath}"`, options, (error, stdout, stderr) => {
+    //   if (error) {
+    //     console.error('Error starting network module:', error);
+    //     reject(error);
+    //     return;
+    //   }
       
-      console.log('Network module started successfully');
-      resolve();
-    });
+    //   console.log('Network module started successfully');
+    //   resolve();
+    // });
+
+    // const windowsStyle = isDev ? 'Normal' : 'Hidden';
+
+    // const psArgs = [
+    //   '-NoProfile',
+    //   '-Command',
+    //   `Start-Process -FilePath '${executablePath}' -Verb RunAs -WindowStyle ${windowsStyle}`
+    // ];
+
+    // // Spawn PowerShell. `windowsHide: false` ensures the PS window is not suppressed.
+    // networkProcess = spawn('powershell.exe', psArgs, {
+    //   windowsHide: !false,
+    //   stdio: 'ignore'
+    // });
+
+    // networkProcess.on('error', (err) => {
+    //   console.error('Failed to spawn elevated process:', err);
+    //   reject(err);
+    // });
+
+    // // As soon as PowerShell is successfully spawned, resolve.
+    // // (The elevated helper will appear in its own window once the user clicks "Yes".)
+    // networkProcess.on('spawn', () => {
+    //   resolve();
+    // });
   });
 }
 
@@ -76,6 +101,14 @@ function getStunInfo() {
   });
 }
 
+function stopProcess() {
+  return new Promise((resolve, reject) => {
+    const client = connectGrpcClient();
+    client.stopProcess({force: false}, (error, response) => {
+      resolve(response);
+    });
+  });
+}
 // Initialize the networking module and gRPC connection
 async function initializeNetworking() {
   try {
@@ -89,12 +122,14 @@ async function initializeNetworking() {
 }
 
 // Cleanup function
-function cleanup() {
-  if (networkProcess) {
-    networkProcess.kill();
-    networkProcess = null;
-  }
+async function cleanup() {
+  console.log("Stopping C++ module");
+  const response = await stopProcess();
+  console.log("C++ module stopped with response:", response);
+  grpcClient.close();
+  networkProcess.kill();
   grpcClient = null;
+  networkProcess = null;
 }
 
 module.exports = {

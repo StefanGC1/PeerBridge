@@ -70,6 +70,15 @@ ipcMain.handle('grpc:getStunInfo', async () => {
   }
 });
 
+ipcMain.handle('grpc:cleanup', async () => {
+  try {
+    await grpcModule.cleanup();
+  } catch (error) {
+    console.error('Error in stopProcess:', error);
+    return { error: error.message || 'Failed to stop process' };
+  }
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     // Clean up the networking module

@@ -1,12 +1,20 @@
 #include "ipc.hpp"
 #include <iostream>
 
-// Constructor now takes P2PSystem reference
-IPCServer::IPCServer(P2PSystem& p2p_system)
-    : p2p_system_(p2p_system) {}
+// Updated constructor without P2PSystem dependency
+IPCServer::IPCServer()
+    : onGetStunInfo_(nullptr), onShutdown_(nullptr) {}
 
 IPCServer::~IPCServer() {
     ShutdownServer();
+}
+
+void IPCServer::setGetStunInfoCallback(GetStunInfoCallback callback) {
+    onGetStunInfo_ = callback;
+}
+
+void IPCServer::setShutdownCallback(ShutdownCallback callback) {
+    onShutdown_ = callback;
 }
 
 void IPCServer::RunServer(const std::string& server_address) {
@@ -37,10 +45,18 @@ grpc::Status IPCServer::GetStunInfo(grpc::ServerContext* context,
                                       peerbridge::StunInfoResponse* reply) {
     std::cout << "IPCServer: GetStunInfo called" << std::endl;
 
-    // Assuming P2PSystem has methods to get the discovered public IP and port.
-    // These would be populated after P2PSystem::initialize() calls discoverPublicAddress().
-    std::string public_ip = p2p_system_.getPublicIP();
-    int public_port = p2p_system_.getPublicPort();
+    // Check if callback is set
+    if (!onGetStunInfo_) {
+        std::string error_msg = "STUN info callback not set.";
+        reply->set_public_ip("");
+        reply->set_public_port(0);
+        reply->set_error_message(error_msg);
+        std::cerr << "IPCServer: Error: " << error_msg << std::endl;
+        return grpc::Status(grpc::StatusCode::INTERNAL, error_msg);
+    }
+
+    // Call the callback to get STUN info
+    auto [public_ip, public_port] = onGetStunInfo_();
 
     if (!public_ip.empty() && public_port > 0) {
         reply->set_public_ip(public_ip);
@@ -57,6 +73,32 @@ grpc::Status IPCServer::GetStunInfo(grpc::ServerContext* context,
         std::cerr << "IPCServer: Error getting STUN info: " << error_msg << std::endl;
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, error_msg);
     }
+}
+
+grpc::Status IPCServer::StopProcess(grpc::ServerContext* context,
+                                    const peerbridge::StopProcessRequest* request,
+                                    peerbridge::StopProcessResponse* reply) {
+    std::cout << "IPCServer: StopProcess called" << std::endl;
+    
+    // Check if callback is set
+    if (!onShutdown_) {
+        std::string error_msg = "Shutdown callback not set.";
+        reply->set_success(false);
+        reply->set_message(error_msg);
+        std::cerr << "IPCServer: Error: " << error_msg << std::endl;
+        return grpc::Status(grpc::StatusCode::INTERNAL, error_msg);
+    }
+    
+    bool force = request->force();
+    std::cout << "IPCServer: Initiating shutdown (force=" << (force ? "true" : "false") << ")" << std::endl;
+    
+    // Call the callback to initiate shutdown
+    onShutdown_(force);
+    
+    reply->set_success(true);
+    reply->set_message("Shutdown initiated");
+    
+    return grpc::Status::OK;
 }
 
 // Example RPC method implementation

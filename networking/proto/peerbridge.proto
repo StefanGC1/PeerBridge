@@ -6,6 +6,8 @@ package peerbridge;
 service PeerBridgeService {
     // RPC to get STUN information (public IP and port)
     rpc GetStunInfo (StunInfoRequest) returns (StunInfoResponse);
+    // RPC to stop the process
+    rpc StopProcess (StopProcessRequest) returns (StopProcessResponse);
     // We will define other RPC methods here later
 }
 
@@ -19,4 +21,16 @@ message StunInfoResponse {
     string public_ip = 1;
     int32 public_port = 2;
     string error_message = 3; // In case of an error fetching STUN info
+}
+
+// Request message for StopProcess
+message StopProcessRequest {
+    // Could include confirmation or additional parameters
+    bool force = 1; // Whether to force stop without waiting for clean shutdown
+}
+
+// Response message for StopProcess
+message StopProcessResponse {
+    bool success = 1;
+    string message = 2;
 } 

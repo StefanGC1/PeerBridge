@@ -1,6 +1,5 @@
 #include "p2p_system.hpp"
 #include "logger.hpp"
-#include "ipc.hpp"
 #include <iostream>
 #include <string>
 #include <thread>
@@ -11,15 +10,11 @@
 // Global variables
 static std::atomic<bool> g_running = true;
 static std::unique_ptr<P2PSystem> g_system;
-static std::unique_ptr<IPCServer> g_ipc_server;
 
 // Signal handler for graceful shutdown
 void signal_handler(int signal) {
     clog << "Signal received: " << signal << ". Shutting down." << std::endl;
     g_running = false;
-    if (g_ipc_server) {
-        g_ipc_server->ShutdownServer();
-    }
 }
 
 int main(int argc, char* argv[]) {
@@ -33,10 +28,13 @@ int main(int argc, char* argv[]) {
     int local_port = 0;
     
     g_system = std::make_unique<P2PSystem>();
-    g_ipc_server = std::make_unique<IPCServer>(*g_system);
     
     g_system->setStatusCallback([](const std::string& status) {
         clog << "[P2P Status] " << status << std::endl;
+        // I will strangle myself with this fix
+        if (status == "Disconnected") {
+            g_running = false;
+        }
     });
     
     g_system->setConnectionCallback([](bool connected, const std::string& peer) {
@@ -55,14 +53,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to initialize the P2P system. Exiting." << std::endl;
         return 1;
     }
-    clog << "P2P System initialized." << std::endl;
-
-    // TODO sometime later: get available port from frontend
-    std::string ipc_server_address = "0.0.0.0:50051";
-    std::thread ipc_thread([&ipc_server_address](){
-        g_ipc_server->RunServer(ipc_server_address);
-        clog << "IPC Server thread finished." << std::endl;
-    });
 
     clog << "PeerBridge C++ module running. Waiting for IPC commands or termination signal." << std::endl;
     
@@ -72,19 +62,9 @@ int main(int argc, char* argv[]) {
     
     clog << "Initiating shutdown..." << std::endl;
 
-    if (g_ipc_server) {
-        g_ipc_server->ShutdownServer();
-    }
-    
-    if (ipc_thread.joinable()) {
-        ipc_thread.join();
-    }
-    clog << "IPC thread joined." << std::endl;
-
     if (g_system) {
-        g_system->disconnect();
+        g_system->disconnect(); // This will also stop the IPC server
     }
-    clog << "P2P system cleaned up." << std::endl;
     
     clog << "Application exiting. Goodbye!" << std::endl;
     return 0;

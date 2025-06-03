@@ -2,6 +2,9 @@
 #include "stun.hpp"
 #include "networking.hpp"
 #include "tun_interface.hpp"
+// Forward declarations for IPCServer to avoid circular includes
+class IPCServer;
+
 #include <string>
 #include <atomic>
 #include <thread>
@@ -50,6 +53,10 @@ public:
     void setConnectionRequestCallback(ConnectionRequestCallback callback);
     
 private:
+    // IPC Server management
+    bool startIPCServer(const std::string& server_address);
+    void stopIPCServer();
+
     // Network discovery
     bool discoverPublicAddress();
     
@@ -92,6 +99,8 @@ private:
     StunClient stun_;
     std::unique_ptr<UDPNetwork> network_;
     std::unique_ptr<TunInterface> tun_;
+    std::unique_ptr<IPCServer> ipc_server_;  // Added IPCServer as a member
+    std::thread ipc_thread_;                  // Thread for running the IPC server
     
     // P2P network thread
     std::thread packet_handling_thread_;

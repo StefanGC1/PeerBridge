@@ -2,7 +2,24 @@ import axiosInstance from "./axios";
 
 export async function login(username, password) {
   try {
-    const response = await axiosInstance.post("/api/login", {username, password});
+    // Get STUN info before login
+    let stunInfo = { publicIp: '', publicPort: 0 };
+    try {
+      stunInfo = await window.electron.grpc.getStunInfo();
+      console.log('Got STUN info:', stunInfo);
+    } catch (stunError) {
+      console.warn('Failed to get STUN info:', stunError);
+      // Continue with login even if STUN info fails
+    }
+    
+    // Add STUN info to login request
+    const response = await axiosInstance.post("/api/login", {
+      username, 
+      password,
+      public_ip: stunInfo.publicIp || '',
+      public_port: stunInfo.publicPort || 0
+    });
+    
     console.log('Login response:', response);
     return response.data;
   } catch (error) {
