@@ -11,8 +11,8 @@ function Lobby() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [onlinePlayers, setOnlinePlayers] = useState(0);
   
-  // Use the lobby context instead of local state
-  const { activeLobby, joinLobbyState, leaveLobbyState } = useLobby();
+  // Use the lobby context
+  const { activeLobby } = useLobby();
 
   useEffect(() => {
     // Listen for online player count updates
@@ -25,16 +25,6 @@ function Lobby() {
     };
   }, []);
 
-  const handleLobbyCreated = (lobbyData) => {
-    joinLobbyState(lobbyData);
-    setShowCreateModal(false);
-  };
-
-  const handleLobbyJoined = (lobbyData) => {
-    joinLobbyState(lobbyData);
-    setShowJoinModal(false);
-  };
-
   return (
     <div className="h-full flex flex-col">
       <div className="bg-card border-b border-border p-6">
@@ -45,10 +35,7 @@ function Lobby() {
       
       <div className="flex-1 overflow-auto p-6">
         {activeLobby ? (
-          <ActiveLobby 
-            lobbyData={activeLobby} 
-            onLeaveLobby={leaveLobbyState} 
-          />
+          <ActiveLobby lobbyData={activeLobby} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6">
             <h2 className="text-xl font-medium text-foreground mb-2">What would you like to do?</h2>
@@ -76,36 +63,30 @@ function Lobby() {
                 </div>
                 <h3 className="text-lg font-medium text-foreground">Join Lobby</h3>
                 <p className="text-sm text-muted-foreground text-center">
-                  Enter a lobby code to join an existing game
+                  Join an existing game session with a lobby ID
                 </p>
               </button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row gap-4 items-center mt-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Users size={16} />
+                <span>{onlinePlayers} players online</span>
+              </div>
             </div>
           </div>
         )}
       </div>
       
-      <div className="bg-card border-t border-border p-4 text-sm text-muted-foreground">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1">
-            <Clock size={16} /> Last active: {new Date().toLocaleTimeString()}
-          </span>
-          <span className="flex items-center gap-1">
-            <Users size={16} /> Online players: {onlinePlayers}
-          </span>
-        </div>
-      </div>
-
       {showCreateModal && (
         <CreateLobbyModal 
           onClose={() => setShowCreateModal(false)}
-          onLobbyCreated={handleLobbyCreated}
         />
       )}
-
+      
       {showJoinModal && (
-        <JoinLobbyModal 
+        <JoinLobbyModal
           onClose={() => setShowJoinModal(false)}
-          onLobbyJoined={handleLobbyJoined}
         />
       )}
     </div>

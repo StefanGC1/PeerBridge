@@ -2,9 +2,11 @@ import React from 'react';
 import { Users, ArrowRightFromLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLobby } from '../../contexts/LobbyContext';
+import { leaveLobby } from '../../lib/api';
+import { leaveLobbyRoom } from '../../lib/socket';
 
 function LobbyIndicator() {
-  const { activeLobby, leaveLobbyState } = useLobby();
+  const { activeLobby, setActiveLobby } = useLobby();
   const navigate = useNavigate();
 
   if (!activeLobby) return null;
@@ -15,7 +17,14 @@ function LobbyIndicator() {
 
   const handleLeaveLobby = async (e) => {
     e.stopPropagation();
-    await leaveLobbyState();
+    try {
+      // Call the API to leave the lobby
+      leaveLobbyRoom(activeLobby.id);
+      await leaveLobby(activeLobby.id);
+      setActiveLobby(null);
+    } catch (err) {
+      console.error('Error leaving lobby:', err);
+    }
   };
 
   return (

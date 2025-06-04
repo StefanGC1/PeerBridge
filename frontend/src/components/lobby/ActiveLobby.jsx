@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Copy, X, Settings } from 'lucide-react';
-import { updateLobby } from '../../lib/socket';
+import { updateLobby, leaveLobby } from '../../lib/api';
 import socket from '../../lib/socket';
+import { leaveLobbyRoom } from '../../lib/socket';
 import { useLobby } from '../../contexts/LobbyContext';
 
-function ActiveLobby({ lobbyData, onLeaveLobby }) {
-  const { activeLobby } = useLobby();
+function ActiveLobby({ lobbyData }) {
+  const { activeLobby, setActiveLobby } = useLobby();
   const [lobby, setLobby] = useState(lobbyData || activeLobby);
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -52,7 +53,12 @@ function ActiveLobby({ lobbyData, onLeaveLobby }) {
 
   const handleLeave = async () => {
     try {
-      await onLeaveLobby();
+      if (activeLobby) {
+        // Call the API to leave the lobby
+        leaveLobbyRoom(activeLobby.id);
+        await leaveLobby(activeLobby.id);
+        setActiveLobby(null);
+      }
     } catch (err) {
       console.error('Error leaving lobby:', err);
     }
@@ -65,13 +71,17 @@ function ActiveLobby({ lobbyData, onLeaveLobby }) {
     if (!lobby) return;
 
     try {
-      await updateLobby(lobby.id, {
+      // Call the API to update the lobby
+      const updatedLobby = await updateLobby(lobby.id, {
         name: lobbyName,
         max_players: maxPlayers
       });
+      
+      // Update local state with the response data
+      setLobby(updatedLobby);
       setShowSettings(false);
     } catch (err) {
-      setError(err.message || 'Failed to update lobby');
+      setError(err.response?.data?.error || 'Failed to update lobby');
     }
   };
 

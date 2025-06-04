@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Moon, Sun } from 'lucide-react';
+import logo from '../../assets/logo.png';
 
 function Landing() {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ function Landing() {
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-primary/10">
       <header className="flex justify-between items-center p-6">
         <div className="flex items-center gap-2">
-          <img src="/src/assets/logo.svg" alt="Logo" className="w-8 h-8" />
+          <img src={logo} alt="Logo" className="w-8 h-8" />
           <h1 className="text-2xl font-bold text-foreground">P2P App</h1>
         </div>
         

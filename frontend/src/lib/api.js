@@ -104,3 +104,57 @@ export async function searchUsers(query) {
     throw error;
   }
 }
+
+// Lobby management API functions
+export async function createLobby(name, maxPlayers = 4) {
+  try {
+    const response = await axiosInstance.post('/api/lobbies/create-lobby', {
+      name,
+      max_players: maxPlayers
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('Error creating lobby:', error);
+    throw error;
+  }
+}
+
+export async function joinLobby(lobbyId) {
+  try {
+    const response = await axiosInstance.post(`/api/lobbies/join-lobby/${lobbyId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error joining lobby:', error);
+    throw error;
+  }
+}
+
+export async function leaveLobby(lobbyId) {
+  try {
+    const response = await axiosInstance.post(`/api/lobbies/leave-lobby/${lobbyId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error leaving lobby:', error);
+    throw error;
+  }
+}
+
+export async function updateLobby(lobbyId, settings) {
+  try {
+    const response = await axiosInstance.put(`/api/lobbies/update-lobby/${lobbyId}`, settings);
+    return response.data;
+  } catch (error) {
+    console.warn('Error updating lobby:', error);
+    throw error;
+  }
+}
+
+export async function deleteLobby(lobbyId) {
+  try {
+    const response = await axiosInstance.post(`/api/lobbies/delete-lobby/${lobbyId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error deleting lobby:', error);
+    throw error;
+  }
+}

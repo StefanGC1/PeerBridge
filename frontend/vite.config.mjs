@@ -15,6 +15,7 @@ export default defineConfig({
       '@proto': path.resolve(__dirname, './generated'),
     },
   },
+  base: "./",
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -1,9 +1,9 @@
 import axios from "axios";
 
-const backend = "https://c752-86-125-92-244.ngrok-free.app";
+const backend = "https://c9f1-86-125-92-157.ngrok-free.app";
 const backend2 = "http://localhost:5000";
 const axiosInstance = axios.create({
-  baseURL: backend2, // Replace with your API base URL
+  baseURL: backend, // Replace with your API base URL
   timeout: 10000, // Request timeout (optional)
   headers: {
     "Content-Type": "application/json",

@@ -1,18 +1,30 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('path');
-const isDev = require('electron-is-dev');
-const { spawn } = require('child_process');
-const grpcModule = require('./grpc');
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { join } from 'path';
+import isDev from 'electron-is-dev';
+import { spawn } from 'child_process';
+import { initializeNetworking, getStunInfo, cleanup } from './grpc.cjs';
+
+import path from 'path';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 // if (require('electron-squirrel-startup')) {
 //   app.quit();
 // }
 
+let __basePackagePath;
+if (!isDev) {
+  // Very weird electron packaging shenanigans
+  console.log("Setting base app.asar path");
+  __basePackagePath = app.getAppPath();
+  console.log(__basePackagePath)
+}
+
 let mainWindow;
 
 function createWindow() {
   // Create the browser window
+  const preloadPath = join(
+    app.getAppPath(), './electron/preload.cjs'); 
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 900,
@@ -20,14 +32,14 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: preloadPath
     }
   });
 
   // Load app
   const startUrl = isDev 
     ? 'http://localhost:3000' 
-    : `file://${path.join(__dirname, '../dist/index.html')}`;
+    : `file://${join(__basePackagePath, 'dist/index.html')}`;
   
   mainWindow.loadURL(startUrl);
 
@@ -46,7 +58,7 @@ app.whenReady().then(async () => {
   
   // Initialize networking and gRPC
   try {
-    await grpcModule.initializeNetworking();
+    await initializeNetworking();
     console.log('Networking module initialized successfully');
   } catch (error) {
     console.error('Failed to initialize networking module:', error);
@@ -62,7 +74,7 @@ app.whenReady().then(async () => {
 // Handle IPC events
 ipcMain.handle('grpc:getStunInfo', async () => {
   try {
-    const stunInfo = await grpcModule.getStunInfo();
+    const stunInfo = await getStunInfo();
     return stunInfo;
   } catch (error) {
     console.error('Error in getStunInfo:', error);
@@ -72,7 +84,7 @@ ipcMain.handle('grpc:getStunInfo', async () => {
 
 ipcMain.handle('grpc:cleanup', async () => {
   try {
-    await grpcModule.cleanup();
+    await cleanup();
   } catch (error) {
     console.error('Error in stopProcess:', error);
     return { error: error.message || 'Failed to stop process' };
@@ -82,12 +94,12 @@ ipcMain.handle('grpc:cleanup', async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     // Clean up the networking module
-    grpcModule.cleanup();
+    cleanup();
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
   // Ensure cleanup happens before quitting
-  grpcModule.cleanup();
+  cleanup();
 });

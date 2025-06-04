@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { joinLobby } from '../../lib/socket';
+import { joinLobby } from '../../lib/api';
+import { joinLobbyRoom } from '../../lib/socket';
+import { useLobby } from '../../contexts/LobbyContext';
 
-function JoinLobbyModal({ onClose, onLobbyJoined }) {
+function JoinLobbyModal({ onClose }) {
+  const { setActiveLobby } = useLobby();
   const [lobbyId, setLobbyId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');
@@ -19,10 +22,19 @@ function JoinLobbyModal({ onClose, onLobbyJoined }) {
     setIsJoining(true);
 
     try {
+      // Call the API to join a lobby
       const lobbyData = await joinLobby(lobbyId.trim());
-      onLobbyJoined(lobbyData);
+      
+      // Join the socket room for real-time updates
+      joinLobbyRoom(lobbyData.id);
+      
+      // Set the active lobby in the context
+      setActiveLobby(lobbyData);
+      
+      // Close the modal
+      onClose();
     } catch (err) {
-      setError(err.message || 'Failed to join lobby. Check the ID and try again.');
+      setError(err.response?.data?.error || 'Failed to join lobby. Check the ID and try again.');
     } finally {
       setIsJoining(false);
     }

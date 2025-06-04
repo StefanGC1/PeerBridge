@@ -28,6 +28,7 @@ socket.on('authenticated', (data) => {
   // Join user's personal room after authentication
   const userData = JSON.parse(localStorage.getItem('user'));
   if (userData && userData.user_id) {
+    // Refactorize this
     joinRoom(`user:${userData.user_id}`);
     console.log(`Joined personal room: user:${userData.user_id}`);
   }
@@ -50,23 +51,23 @@ export const initializeSocket = () => {
 };
 
 export const stopSocket = () => {
-    socket.disconnect();
-  };
-
-/**
- * Join a game room
- * @param {string} roomId - ID of the room to join
- */
-export const joinRoom = (roomId) => {
-  socket.emit('join', { room: roomId });
+  socket.disconnect();
 };
 
 /**
- * Leave a game room
+ * Join a socket room
+ * @param {string} roomId - ID of the room to join
+ */
+export const joinRoom = (roomId) => {
+  socket.emit('join_room', { room: roomId });
+};
+
+/**
+ * Leave a socket room
  * @param {string} roomId - ID of the room to leave
  */
 export const leaveRoom = (roomId) => {
-  socket.emit('leave', { room: roomId });
+  socket.emit('leave_room', { room: roomId });
 };
 
 /**
@@ -79,108 +80,44 @@ export const sendMessage = (roomId, message) => {
 };
 
 /**
- * Create a new lobby
- * @param {string} name - Name of the lobby
- * @param {number} maxPlayers - Maximum players allowed in the lobby
- * @returns {Promise} - Resolves when lobby is created
- */
-export const createLobby = (name, maxPlayers = 4) => {
-  return new Promise((resolve, reject) => {
-    const onLobbyCreated = (data) => {
-      socket.off('lobby_created', onLobbyCreated);
-      socket.off('lobby_error', onLobbyError);
-      resolve(data);
-    };
-
-    const onLobbyError = (error) => {
-      socket.off('lobby_created', onLobbyCreated);
-      socket.off('lobby_error', onLobbyError);
-      reject(error);
-    };
-
-    socket.on('lobby_created', onLobbyCreated);
-    socket.on('lobby_error', onLobbyError);
-
-    socket.emit('create_lobby', { name, max_players: maxPlayers });
-  });
-};
-
-/**
- * Join an existing lobby by ID
+ * Join a lobby's socket room to receive real-time updates
  * @param {string} lobbyId - ID of the lobby to join
- * @returns {Promise} - Resolves when lobby is joined
  */
-export const joinLobby = (lobbyId) => {
-  return new Promise((resolve, reject) => {
-    const onLobbyJoined = (data) => {
-      socket.off('lobby_joined', onLobbyJoined);
-      socket.off('lobby_error', onLobbyError);
-      resolve(data);
-    };
-
-    const onLobbyError = (error) => {
-      socket.off('lobby_joined', onLobbyJoined);
-      socket.off('lobby_error', onLobbyError);
-      reject(error);
-    };
-
-    socket.on('lobby_joined', onLobbyJoined);
-    socket.on('lobby_error', onLobbyError);
-
-    socket.emit('join_lobby', { lobby_id: lobbyId });
-  });
+export const joinLobbyRoom = (lobbyId) => {
+  socket.emit('join_lobby_room', { lobby_id: lobbyId });
 };
 
 /**
- * Leave the current lobby
+ * Leave a lobby's socket room
  * @param {string} lobbyId - ID of the lobby to leave
- * @returns {Promise} - Resolves when lobby is left
  */
-export const leaveLobby = (lobbyId) => {
-  return new Promise((resolve, reject) => {
-    const onLobbyLeft = (data) => {
-      socket.off('lobby_left', onLobbyLeft);
-      socket.off('lobby_error', onLobbyError);
-      resolve(data);
-    };
-
-    const onLobbyError = (error) => {
-      socket.off('lobby_left', onLobbyLeft);
-      socket.off('lobby_error', onLobbyError);
-      reject(error);
-    };
-
-    socket.on('lobby_left', onLobbyLeft);
-    socket.on('lobby_error', onLobbyError);
-
-    socket.emit('leave_lobby', { lobby_id: lobbyId });
-  });
+export const leaveLobbyRoom = (lobbyId) => {
+  socket.emit('leave_lobby_room', { lobby_id: lobbyId });
 };
 
 /**
- * Update lobby settings (host only)
- * @param {string} lobbyId - ID of the lobby to update
- * @param {object} settings - Settings to update
- * @returns {Promise} - Resolves when lobby is updated
+ * Get current lobby data from the server
+ * @param {string} lobbyId - ID of the lobby
+ * @returns {Promise} - Resolves with lobby data
  */
-export const updateLobby = (lobbyId, settings) => {
+export const getLobbyData = (lobbyId) => {
   return new Promise((resolve, reject) => {
-    const onLobbyUpdated = (data) => {
-      socket.off('lobby_update_success', onLobbyUpdated);
+    const onLobbyData = (data) => {
+      socket.off('lobby_data', onLobbyData);
       socket.off('lobby_error', onLobbyError);
       resolve(data);
     };
 
     const onLobbyError = (error) => {
-      socket.off('lobby_update_success', onLobbyUpdated);
+      socket.off('lobby_data', onLobbyData);
       socket.off('lobby_error', onLobbyError);
       reject(error);
     };
 
-    socket.on('lobby_update_success', onLobbyUpdated);
+    socket.on('lobby_data', onLobbyData);
     socket.on('lobby_error', onLobbyError);
 
-    socket.emit('update_lobby', { lobby_id: lobbyId, ...settings });
+    socket.emit('get_lobby_data', { lobby_id: lobbyId });
   });
 };
 

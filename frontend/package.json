@@ -4,13 +4,14 @@
   "description": "",
   "license": "ISC",
   "author": "",
+  "type": "module",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "electron .",
     "dev:concurrently": "node scripts/dev-concurrent.js",
-    "build": "vite build",
+    "build": "vite build && node scripts/prepare-build.js",
     "grpc:generate": "mkdirp generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --proto_path=proto proto/peerbridge.proto",
     "preview": "vite preview",
     "start": "electron .",
@@ -26,8 +27,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
-    "socket.io-client": "^4.8.1",
-    "sudo-prompt": "^9.2.1"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.10",
@@ -50,7 +50,12 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "proto/**/*",
+      "cpp/**/*"
+    ],
+    "asarUnpack": [
+      "cpp/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities"

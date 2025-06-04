@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { createLobby } from '../../lib/socket';
+import { createLobby } from '../../lib/api';
+import { joinLobbyRoom } from '../../lib/socket';
+import { useLobby } from '../../contexts/LobbyContext';
 
-function CreateLobbyModal({ onClose, onLobbyCreated }) {
+function CreateLobbyModal({ onClose }) {
+  const { setActiveLobby } = useLobby();
   const [name, setName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [isCreating, setIsCreating] = useState(false);
@@ -14,8 +17,17 @@ function CreateLobbyModal({ onClose, onLobbyCreated }) {
     setIsCreating(true);
 
     try {
+      // Call the API to create a lobby
       const lobbyData = await createLobby(name || 'Unnamed Lobby', maxPlayers);
-      onLobbyCreated(lobbyData);
+      
+      // Join the socket room for real-time updates
+      joinLobbyRoom(lobbyData.id);
+      
+      // Set the active lobby in the context
+      setActiveLobby(lobbyData);
+      
+      // Close the modal
+      onClose();
     } catch (err) {
       setError(err.message || 'Failed to create lobby');
     } finally {

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import socket from '../lib/socket';
-import { leaveLobby } from '../lib/socket';
+import { joinLobbyRoom, leaveLobbyRoom } from '../lib/socket';
 
 // Create the context
 const LobbyContext = createContext(null);
@@ -10,6 +10,8 @@ export function LobbyProvider({ children }) {
   const [activeLobby, setActiveLobby] = useState(null);
 
   useEffect(() => {
+    if (!activeLobby) return;
+
     // Listen for lobby updates
     const handleLobbyUpdated = (updatedLobby) => {
       if (activeLobby && updatedLobby.id === activeLobby.id) {
@@ -17,33 +19,30 @@ export function LobbyProvider({ children }) {
       }
     };
 
+    // Listen for lobby deletion
+    const handleLobbyDeleted = (data) => {
+      if (activeLobby && data.lobby_id === activeLobby.id) {
+        setActiveLobby(null);
+      }
+    };
+
+    // Join the socket room for this lobby to receive real-time updates
+    joinLobbyRoom(activeLobby.id);
     socket.on('lobby_updated', handleLobbyUpdated);
+    socket.on('lobby_deleted', handleLobbyDeleted);
 
     return () => {
+      // Leave the socket room when the component unmounts or the active lobby changes
+      leaveLobbyRoom(activeLobby.id);
       socket.off('lobby_updated', handleLobbyUpdated);
+      socket.off('lobby_deleted', handleLobbyDeleted);
     };
-  }, [activeLobby]);
-
-  const joinLobbyState = (lobbyData) => {
-    setActiveLobby(lobbyData);
-  };
-
-  const leaveLobbyState = async () => {
-    if (activeLobby) {
-      try {
-        await leaveLobby(activeLobby.id);
-      } catch (err) {
-        console.error('Error leaving lobby:', err);
-      }
-    }
-    setActiveLobby(null);
-  };
+  }, [activeLobby?.id]);
 
   // The context value that will be supplied to any descendants of this provider
   const contextValue = {
     activeLobby,
-    joinLobbyState,
-    leaveLobbyState,
+    setActiveLobby,
   };
 
   return (
