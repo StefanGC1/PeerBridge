@@ -1,12 +1,12 @@
 import React from 'react';
 import { Users, ArrowRightFromLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useLobby } from '../../contexts/LobbyContext';
+import { UseLobby } from '../../contexts/LobbyContext';
 import { leaveLobby } from '../../lib/api';
 import { leaveLobbyRoom } from '../../lib/socket';
 
 function LobbyIndicator() {
-  const { activeLobby, setActiveLobby } = useLobby();
+  const { activeLobby, setActiveLobby } = UseLobby();
   const navigate = useNavigate();
 
   if (!activeLobby) return null;

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { createLobby } from '../../lib/api';
 import { joinLobbyRoom } from '../../lib/socket';
-import { useLobby } from '../../contexts/LobbyContext';
+import { UseLobby } from '../../contexts/LobbyContext';
 
 function CreateLobbyModal({ onClose }) {
-  const { setActiveLobby } = useLobby();
+  const { setActiveLobby } = UseLobby();
   const [name, setName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [isCreating, setIsCreating] = useState(false);

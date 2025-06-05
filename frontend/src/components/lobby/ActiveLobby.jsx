@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Copy, X, Settings } from 'lucide-react';
-import { updateLobby, leaveLobby } from '../../lib/api';
+import { updateLobby, leaveLobby, getUsersBatch } from '../../lib/api';
 import socket from '../../lib/socket';
 import { leaveLobbyRoom } from '../../lib/socket';
-import { useLobby } from '../../contexts/LobbyContext';
+import { UseLobby } from '../../contexts/LobbyContext';
 
 function ActiveLobby({ lobbyData }) {
-  const { activeLobby, setActiveLobby } = useLobby();
+  const { activeLobby, setActiveLobby } = UseLobby();
   const [lobby, setLobby] = useState(lobbyData || activeLobby);
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [lobbyName, setLobbyName] = useState(lobby?.name || '');
   const [maxPlayers, setMaxPlayers] = useState(lobby?.max_players || 4);
   const [error, setError] = useState('');
+  const [usernameMap, setUsernameMap] = useState({});
+  const [loadingUsernames, setLoadingUsernames] = useState(false);
   
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const isHost = lobby?.host === userData.user_id;
@@ -42,6 +44,25 @@ function ActiveLobby({ lobbyData }) {
       socket.off('lobby_updated', handleLobbyUpdated);
     };
   }, [lobby?.id]);
+
+  // Fetch usernames when lobby members change
+  useEffect(() => {
+    if (!lobby || !lobby.members || lobby.members.length === 0) return;
+    
+    const fetchUsernames = async () => {
+      setLoadingUsernames(true);
+      try {
+        const userMap = await getUsersBatch(lobby.members);
+        setUsernameMap(userMap);
+      } catch (err) {
+        console.error('Error fetching usernames:', err);
+      } finally {
+        setLoadingUsernames(false);
+      }
+    };
+    
+    fetchUsernames();
+  }, [lobby?.members]);
 
   const handleCopyId = () => {
     if (lobby) {
@@ -89,6 +110,22 @@ function ActiveLobby({ lobbyData }) {
   if (!lobby) {
     return <div className="text-center py-10">Loading lobby...</div>;
   }
+
+  // Get username display function
+  const getUserDisplay = (userId) => {
+    // If it's the current user, show "You"
+    if (userId === userData.user_id) {
+      return <span className="font-medium">You</span>;
+    }
+    
+    // If we have the username in our map, show it
+    if (usernameMap[userId]?.username) {
+      return usernameMap[userId].username;
+    }
+    
+    // Fallback to user ID (truncated for better UX)
+    return `User ${userId.substring(0, 8)}...`;
+  };
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -197,7 +234,9 @@ function ActiveLobby({ lobbyData }) {
             Players ({lobby.members.length}/{lobby.max_players})
           </h3>
           <div className="space-y-2">
-            {/* This would ideally show player names, but we'll use IDs for now */}
+            {loadingUsernames && lobby.members.length > 0 && (
+              <div className="text-sm text-muted-foreground">Loading player information...</div>
+            )}
             {lobby.members.map((memberId) => (
               <div 
                 key={memberId}
@@ -205,10 +244,12 @@ function ActiveLobby({ lobbyData }) {
               >
                 <div className="flex items-center">
                   <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mr-3">
-                    {memberId.slice(0, 2).toUpperCase()}
+                    {usernameMap[memberId]?.username 
+                      ? usernameMap[memberId].username.charAt(0).toUpperCase() 
+                      : memberId.slice(0, 1).toUpperCase()}
                   </div>
-                  <div className="font-mono text-sm truncate">
-                    {memberId}
+                  <div className="text-sm truncate">
+                    {getUserDisplay(memberId)}
                     {memberId === lobby.host && (
                       <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                         Host

@@ -43,8 +43,8 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.yourname.p2papp",
-    "productName": "P2P App",
+    "appId": "com.scrisan.peerbridge",
+    "productName": "PeerBridge",
     "directories": {
       "output": "dist_electron"
     },
@@ -54,6 +54,13 @@
       "proto/**/*",
       "cpp/**/*"
     ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PeerBridge"
+    },
     "asarUnpack": [
       "cpp/**/*"
     ],

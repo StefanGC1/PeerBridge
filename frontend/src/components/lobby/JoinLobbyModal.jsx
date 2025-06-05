@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { joinLobby } from '../../lib/api';
 import { joinLobbyRoom } from '../../lib/socket';
-import { useLobby } from '../../contexts/LobbyContext';
+import { UseLobby } from '../../contexts/LobbyContext';
 
 function JoinLobbyModal({ onClose }) {
-  const { setActiveLobby } = useLobby();
+  const { setActiveLobby } = UseLobby();
   const [lobbyId, setLobbyId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');

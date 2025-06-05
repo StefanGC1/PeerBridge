@@ -27,7 +27,12 @@ def create_app():
     # Setup extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    socketio.init_app(app, cors_allowed_origins="*")
+    socketio.init_app(app, 
+                     cors_allowed_origins="*", 
+                     ping_timeout=60,
+                     ping_interval=25,
+                     async_mode='eventlet',
+                     websocket_timeout=30)
     jwt.init_app(app)
     cors.init_app(app, supports_credentials=True)
 

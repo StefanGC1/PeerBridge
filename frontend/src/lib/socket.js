@@ -2,8 +2,17 @@ import { io } from 'socket.io-client';
 import axiosInstance from './axios';
 
 // Create a socket instance - connect to same host as API
-const socket = io(axiosInstance.defaults.baseURL, {
+const backend = "https://b95d-86-125-92-157.ngrok-free.app";
+const socket = io(backend, {
   autoConnect: false, // Don't connect automatically, we'll do it after auth
+  transports: ['websocket', 'polling'], // Try WebSocket first, fall back to polling
+  extraHeaders: {
+    'ngrok-skip-browser-warning': 'true'
+  },
+  reconnectionAttempts: 5,
+  timeout: 10000, // Increase timeout for ngrok
+  upgrade: true, // Try to upgrade to WebSocket if possible
+  rememberUpgrade: true
 });
 
 // Event listeners

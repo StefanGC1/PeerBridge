@@ -158,3 +158,15 @@ export async function deleteLobby(lobbyId) {
     throw error;
   }
 }
+
+export async function getUsersBatch(userIds) {
+  try {
+    const response = await axiosInstance.post('/api/users/batch', {
+      user_ids: userIds
+    });
+    return response.data.users;
+  } catch (error) {
+    console.warn('Error getting users batch:', error);
+    throw error;
+  }
+}

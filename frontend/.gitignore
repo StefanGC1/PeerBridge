@@ -132,6 +132,8 @@ dist
 # o
 bin
 
+.stignore
+.stfolder
 
 dist
 dist_electron

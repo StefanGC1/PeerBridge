@@ -53,10 +53,10 @@ export function LobbyProvider({ children }) {
 }
 
 // Custom hook for consuming the context
-export function useLobby() {
+export const UseLobby = () => {
   const context = useContext(LobbyContext);
   if (!context) {
-    throw new Error('useLobby must be used within a LobbyProvider');
+    throw new Error('UseLobby must be used within a LobbyProvider');
   }
   return context;
 } 

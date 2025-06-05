@@ -4,7 +4,7 @@ import CreateLobbyModal from '../components/lobby/CreateLobbyModal';
 import JoinLobbyModal from '../components/lobby/JoinLobbyModal';
 import ActiveLobby from '../components/lobby/ActiveLobby';
 import socket from '../lib/socket';
-import { useLobby } from '../contexts/LobbyContext';
+import { UseLobby } from '../contexts/LobbyContext';
 
 function Lobby() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -12,7 +12,7 @@ function Lobby() {
   const [onlinePlayers, setOnlinePlayers] = useState(0);
   
   // Use the lobby context
-  const { activeLobby } = useLobby();
+  const { activeLobby } = UseLobby();
 
   useEffect(() => {
     // Listen for online player count updates

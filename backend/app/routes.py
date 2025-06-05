@@ -326,3 +326,21 @@ def delete_lobby(lobby_id):
     socketio.emit('lobby_deleted', {"lobby_id": lobby_id}, room=f"lobby_{lobby_id}")
     
     return jsonify({"message": "Lobby deleted"}), 200
+
+@bp.route("/users/batch", methods=["POST"])
+@jwt_required()
+def get_users_batch():
+    """Get usernames for a batch of user IDs"""
+    data = request.get_json() or {}
+    user_ids = data.get('user_ids', [])
+    
+    if not user_ids:
+        return jsonify({"users": {}}), 200
+    
+    # Get users from database
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    
+    # Create a map of user_id -> username
+    user_map = {user.id: {"username": user.username} for user in users}
+    
+    return jsonify({"users": user_map}), 200
