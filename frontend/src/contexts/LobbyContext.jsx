@@ -12,6 +12,9 @@ export function LobbyProvider({ children }) {
   useEffect(() => {
     if (!activeLobby) return;
 
+    // TODO #socketLogic: Use the same logic for lobby join / update / leave from #socketLogic in ActiveLobby.jsx
+    // Model: Define the socket event in socket.js, then add the listeners
+
     // Listen for lobby updates
     const handleLobbyUpdated = (updatedLobby) => {
       if (activeLobby && updatedLobby.id === activeLobby.id) {

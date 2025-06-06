@@ -170,3 +170,33 @@ export async function getUsersBatch(userIds) {
     throw error;
   }
 }
+
+export async function startLobby(lobbyId) {
+  try {
+    const response = await axiosInstance.post(`/api/lobbies/start-lobby/${lobbyId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error starting lobby:', error);
+    throw error;
+  }
+}
+
+export async function stopLobby(lobbyId) {
+  try {
+    const response = await axiosInstance.post(`/api/lobbies/stop-lobby/${lobbyId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error stopping lobby:', error);
+    throw error;
+  }
+}
+
+export async function getPeerInfo(lobbyId) {
+  try {
+    const response = await axiosInstance.get(`/api/lobbies/${lobbyId}/peer-info`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error getting peer info:', error);
+    throw error;
+  }
+}

@@ -4,11 +4,23 @@ from .extensions import socketio
 from .schemas import OnlineUser, Lobby
 from flask_jwt_extended import decode_token
 
+# TODO: Refactorize auth and reconnect
+
 # Basic socket events
+
+# Connect - receives auth token
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth=None):
     current_app.logger.debug(f'Client connected: {request.sid}')
     emit('connected', {'message': 'You are connected!'})
+
+    user_id = session.get('user_id')
+    if user_id:
+        # We know this is a user that has reconnected
+        online_user = OnlineUser.from_redis(user_id)
+        if online_user:
+            online_user.save_to_redis(expire_seconds=None)
+            current_app.logger.debug(f'Set TTL to infinite for user {user_id}')
     
     # Emit current online count to the newly connected client
     online_users = OnlineUser.get_all_online_users()

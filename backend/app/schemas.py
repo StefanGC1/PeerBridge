@@ -80,14 +80,23 @@ class Lobby:
     name: str = "Unnamed Lobby"
     host: str = None
     members: List[str] = field(default_factory=list)
+    members_status: Dict[str, str] = field(default_factory=dict)  # Map of user_id -> status
     max_players: int = 4
-    status: str = "open"
+    status: str = "idle"  # idle, starting, started, failed
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     
     def __post_init__(self):
-        """Ensure host is in members list"""
+        """Ensure host is in members list and initialize member statuses"""
         if self.host and self.host not in self.members:
             self.members.append(self.host)
+        
+        # Set status to idle if not already set
+        self.status = "idle"
+            
+        # Initialize status for all members if not already set
+        for member_id in self.members:
+            if member_id not in self.members_status:
+                self.members_status[member_id] = "disconnected"
     
     @classmethod
     def from_redis(cls, lobby_id: str, redis_instance=None):
@@ -123,6 +132,7 @@ class Lobby:
             return False
         
         self.members.append(user_id)
+        self.members_status[user_id] = "disconnected"
         return True
     
     def remove_member(self, user_id: str):
@@ -131,11 +141,35 @@ class Lobby:
             return False
         
         self.members.remove(user_id)
+        if user_id in self.members_status:
+            del self.members_status[user_id]
         
         # If host left, assign a new host or mark for deletion
         if self.host == user_id and self.members:
             self.host = self.members[0]
         
+        return True
+    
+    def set_member_status(self, user_id: str, status: str):
+        """Set status for a specific member"""
+        if user_id not in self.members:
+            return False
+        
+        valid_statuses = ["disconnected", "connecting", "connected", "failed"]
+        if status not in valid_statuses:
+            return False
+            
+        self.members_status[user_id] = status
+        return True
+        
+    def set_all_members_status(self, status: str):
+        """Set status for all members"""
+        valid_statuses = ["disconnected", "connecting", "connected", "failed"]
+        if status not in valid_statuses:
+            return False
+            
+        for member_id in self.members:
+            self.members_status[member_id] = status
         return True
     
     def is_member(self, user_id: str):
@@ -159,7 +193,9 @@ class Lobby:
             self.max_players = max_players
         
         if status is not None:
-            self.status = status
+            valid_statuses = ["idle", "starting", "started", "failed"]
+            if status in valid_statuses:
+                self.status = status
         
         return True
     

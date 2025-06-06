@@ -62,7 +62,7 @@ def login():
         ip=user_ip,
         port=user_port
     )
-    online_user.save_to_redis(expire_seconds=300)  # 5 minutes initial TTL
+    online_user.save_to_redis(expire_seconds=20)  # 20 seconds initial TTL
 
     access_token = create_access_token(identity=user.id)
     return jsonify({
@@ -200,7 +200,7 @@ def create_lobby():
         host=current_user_id,
         members=[current_user_id],
         max_players=max_players,
-        status='open'
+        status='idle'
     )
     
     # Save the lobby to Redis
@@ -228,8 +228,8 @@ def join_lobby(lobby_id):
     if lobby.is_full():
         return jsonify({"error": "Lobby is full"}), 400
     
-    # Check if lobby is closed
-    if lobby.status != 'open':
+    # Check if lobby is in a state that allows joining
+    if lobby.status != 'idle':
         return jsonify({"error": "Lobby is not open for joining"}), 400
     
     # Check if user is already in the lobby
@@ -344,3 +344,96 @@ def get_users_batch():
     user_map = {user.id: {"username": user.username} for user in users}
     
     return jsonify({"users": user_map}), 200
+
+@bp.route("/lobbies/start-lobby/<lobby_id>", methods=["POST"])
+@jwt_required()
+def start_lobby(lobby_id):
+    current_user_id = get_jwt_identity()
+    
+    # Get the lobby from Redis
+    lobby = Lobby.from_redis(lobby_id)
+    if not lobby:
+        return jsonify({"error": "Lobby not found"}), 404
+    
+    # Only the host can start the lobby
+    if not lobby.is_host(current_user_id):
+        return jsonify({"error": "Only the host can start the lobby"}), 403
+    
+    # Check if at least 2 players are in the lobby
+    if len(lobby.members) < 2:
+        return jsonify({"error": "At least 2 players are required to start"}), 400
+    
+    # Update lobby status and all member statuses
+    lobby.update(status="starting")
+    lobby.set_all_members_status("connecting")
+    lobby.save_to_redis()
+    
+    # Notify all members about the lobby starting
+    socketio.emit('lobby_starting', lobby.to_dict(), room=f"lobby_{lobby_id}")
+    
+    return jsonify({"message": "Starting lobby"}), 200
+
+@bp.route("/lobbies/stop-lobby/<lobby_id>", methods=["POST"])
+@jwt_required()
+def stop_lobby(lobby_id):
+    current_user_id = get_jwt_identity()
+    
+    # Get the lobby from Redis
+    lobby = Lobby.from_redis(lobby_id)
+    if not lobby:
+        return jsonify({"error": "Lobby not found"}), 404
+    
+    # Only the host can stop the lobby
+    if not lobby.is_host(current_user_id):
+        return jsonify({"error": "Only the host can stop the lobby"}), 403
+    
+    # Update lobby status and all member statuses
+    lobby.update(status="idle")
+    lobby.set_all_members_status("disconnected")
+    lobby.save_to_redis()
+    
+    # Notify all members about the lobby stopping
+    socketio.emit('lobby_stopping', lobby.to_dict(), room=f"lobby_{lobby_id}")
+    
+    return jsonify({"message": "Stopping lobby"}), 200
+
+@bp.route("/lobbies/<lobby_id>/peer-info", methods=["GET"])
+@jwt_required()
+def get_peer_info(lobby_id):
+    current_user_id = get_jwt_identity()
+    
+    # Get the lobby from Redis
+    lobby = Lobby.from_redis(lobby_id)
+    if not lobby:
+        return jsonify({"error": "Lobby not found"}), 404
+    
+    # Check if user is a member of the lobby
+    if not lobby.is_member(current_user_id):
+        return jsonify({"error": "Not a member of this lobby"}), 403
+    
+    # Get all online users
+    online_users = OnlineUser.get_all_online_users()
+    
+    # Build peer info list with connection strings
+    peer_info = []
+    # TODO: Maybe remove self_index later.
+    self_index = -1
+    
+    for i, member_id in enumerate(lobby.members):
+        if member_id in online_users:
+            user_data = online_users[member_id]
+            connection_string = f"{user_data['ip']}:{user_data['port']}"
+            
+            if member_id == current_user_id:
+                self_index = i
+                peer_info.append("self")
+            else:
+                peer_info.append(connection_string)
+        else:
+            # User is not online, add placeholder
+            peer_info.append("unavailable")
+    
+    return jsonify({
+        "peer_info": peer_info,
+        "self_index": self_index
+    }), 200

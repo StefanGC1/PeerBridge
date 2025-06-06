@@ -14,6 +14,7 @@ static std::unique_ptr<P2PSystem> g_system;
 // Signal handler for graceful shutdown
 void signal_handler(int signal) {
     clog << "Signal received: " << signal << ". Shutting down." << std::endl;
+    // TODO: Set the g_running of the p2p_system to false.
     g_running = false;
 }
 

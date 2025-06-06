@@ -375,6 +375,7 @@ void UDPNetwork::receiveLoop() {
             
             // Store peer endpoint if not already connected
             if (!connected_) {
+                // TODO: This line might be redundant and might not work with multiple peers
                 peer_endpoint_ = sender_endpoint;
                 connected_ = true;
                 if (on_connection_) {
@@ -658,4 +659,6 @@ void UDPNetwork::handleDisconnect() {
             on_connection_(false);
         }
     });
+
+// TODO: Add a setPeerInfo function
 }

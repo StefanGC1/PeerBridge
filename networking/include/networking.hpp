@@ -73,6 +73,7 @@ private:
     
     boost::asio::io_context& io_context_;
     std::unique_ptr<boost::asio::ip::udp::socket> socket_;
+    // TODO: Handle multiple peers
     boost::asio::ip::udp::endpoint peer_endpoint_;
     
     // Async operation buffers and state
