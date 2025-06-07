@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import isDev from 'electron-is-dev';
 import { spawn } from 'child_process';
-import { initializeNetworking, getStunInfo, cleanup } from './grpc.cjs';
+import { initializeNetworking, getStunInfo, startConnection, cleanup } from './grpc.cjs';
 
 import path from 'path';
 
@@ -79,6 +79,20 @@ ipcMain.handle('grpc:getStunInfo', async () => {
   } catch (error) {
     console.error('Error in getStunInfo:', error);
     return { error: error.message || 'Failed to get STUN info' };
+  }
+});
+
+ipcMain.handle('grpc:startConnection', async (event, peerInfo, selfIndex, shouldFail) => {
+  try {
+    console.log('Starting connection with peer info:', { peerInfo, selfIndex, shouldFail });
+    const result = await startConnection(peerInfo, selfIndex, shouldFail);
+    return result;
+  } catch (error) {
+    console.error('Error in startConnection:', error);
+    return { 
+      success: false, 
+      errorMessage: error.message || 'Failed to start connection' 
+    };
   }
 });
 

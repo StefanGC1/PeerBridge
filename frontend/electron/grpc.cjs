@@ -115,6 +115,38 @@ function stopProcess() {
     });
   });
 }
+
+// Start connection with peers
+function startConnection(peerInfo, selfIndex, shouldFail = false) {
+  return new Promise((resolve, reject) => {
+    const client = connectGrpcClient();
+    
+    console.log("Calling startConnection with:", {
+      peer_info: peerInfo,
+      self_index: selfIndex,
+      should_fail: shouldFail
+    });
+    
+    client.startConnection({
+      peer_info: peerInfo,
+      self_index: selfIndex,
+      should_fail: shouldFail
+    }, (error, response) => {
+      if (error) {
+        console.error('Error starting connection:', error);
+        reject(error);
+        return;
+      }
+      
+      console.log("StartConnection response:", response);
+      resolve({
+        success: response.success,
+        errorMessage: response.error_message
+      });
+    });
+  });
+}
+
 // Initialize the networking module and gRPC connection
 async function initializeNetworking() {
   try {
@@ -140,5 +172,6 @@ async function cleanup() {
 module.exports = {
   initializeNetworking,
   getStunInfo,
+  startConnection,
   cleanup
 };

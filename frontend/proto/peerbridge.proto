@@ -8,7 +8,8 @@ service PeerBridgeService {
     rpc GetStunInfo (StunInfoRequest) returns (StunInfoResponse);
     // RPC to stop the process
     rpc StopProcess (StopProcessRequest) returns (StopProcessResponse);
-    // We will define other RPC methods here later
+    // RPC to start connection with peers
+    rpc StartConnection (StartConnectionRequest) returns (StartConnectionResponse);
 }
 
 // Request message for GetStunInfo
@@ -33,4 +34,17 @@ message StopProcessRequest {
 message StopProcessResponse {
     bool success = 1;
     string message = 2;
+}
+
+// Request message for StartConnection
+message StartConnectionRequest {
+    repeated string peer_info = 1; // List of peer connection strings (ip:port)
+    int32 self_index = 2;        // Index of self in the peer_info list
+    bool should_fail = 3;        // Temporary testing flag to simulate failure
+}
+
+// Response message for StartConnection
+message StartConnectionResponse {
+    bool success = 1;
+    string error_message = 2;
 } 

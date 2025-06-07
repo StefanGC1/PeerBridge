@@ -20,10 +20,7 @@ function Login() {
     setIsLoading(true);
     
     try {
-      // Call the login function from api.js
-      const userData = await login(username, password);
-      
-      // Store user data in localStorage or state management
+      const userData = await login(username, password)
       localStorage.setItem('user', JSON.stringify(userData));
       
       // Initialize socket connection

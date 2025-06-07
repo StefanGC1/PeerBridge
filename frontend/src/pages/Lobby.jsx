@@ -35,7 +35,7 @@ function Lobby() {
       
       <div className="flex-1 overflow-auto p-6">
         {activeLobby ? (
-          <ActiveLobby lobbyData={activeLobby} />
+          <ActiveLobby />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6">
             <h2 className="text-xl font-medium text-foreground mb-2">What would you like to do?</h2>

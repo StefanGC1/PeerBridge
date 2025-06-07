@@ -54,7 +54,7 @@ def create_app():
                      ping_interval=15,
                      websocket_timeout=30,
                      async_mode='eventlet',
-                     manage_session=False)
+                     manage_session=True)
 
     # Necessary for logging in socketIO events, I think
     from . import sockets

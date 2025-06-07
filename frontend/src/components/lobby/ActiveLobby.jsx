@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Copy, X, Settings, Play, Square } from 'lucide-react';
-import { updateLobby, leaveLobby, getUsersBatch, startLobby, stopLobby, getPeerInfo } from '../../lib/api';
-import socket from '../../lib/socket';
-import { leaveLobbyRoom, onLobbyStarting, onLobbyStopping } from '../../lib/socket';
+import { updateLobby, leaveLobby, startLobby, stopLobby } from '../../lib/api';
+import { leaveLobbyRoom } from '../../lib/socket';
 import { UseLobby } from '../../contexts/LobbyContext';
 
 // Status color mapping
@@ -18,103 +17,29 @@ const STATUS_COLORS = {
   failed: 'bg-red-500', // Red
 };
 
-function ActiveLobby({ lobbyData }) {
-  const { activeLobby, setActiveLobby } = UseLobby();
-  const [lobby, setLobby] = useState(lobbyData || activeLobby);
+function ActiveLobby() {
+  const { activeLobby, setActiveLobby, usernameMap, loadingUsernames } = UseLobby();
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [lobbyName, setLobbyName] = useState(lobby?.name || '');
-  const [maxPlayers, setMaxPlayers] = useState(lobby?.max_players || 4);
+  const [lobbyName, setLobbyName] = useState(activeLobby?.name || '');
+  const [maxPlayers, setMaxPlayers] = useState(activeLobby?.max_players || 4);
   const [error, setError] = useState('');
-  const [usernameMap, setUsernameMap] = useState({});
-  const [loadingUsernames, setLoadingUsernames] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
   
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
-  const isHost = lobby?.host === userData.user_id;
+  const isHost = activeLobby?.host === userData.user_id;
 
   useEffect(() => {
     // Update local state when the global active lobby changes
     if (activeLobby) {
-      setLobby(activeLobby);
       setLobbyName(activeLobby.name);
       setMaxPlayers(activeLobby.max_players);
     }
   }, [activeLobby]);
 
-  useEffect(() => {
-    // Listen for lobby updates
-    const handleLobbyUpdated = (updatedLobby) => {
-      if (lobby && updatedLobby.id === lobby.id) {
-        setLobby(updatedLobby);
-        setLobbyName(updatedLobby.name);
-        setMaxPlayers(updatedLobby.max_players);
-      }
-    };
-
-    socket.on('lobby_updated', handleLobbyUpdated);
-
-    return () => {
-      socket.off('lobby_updated', handleLobbyUpdated);
-    };
-  }, [lobby?.id]);
-
-  // Fetch usernames when lobby members change
-  useEffect(() => {
-    if (!lobby || !lobby.members || lobby.members.length === 0) return;
-    
-    const fetchUsernames = async () => {
-      setLoadingUsernames(true);
-      try {
-        const userMap = await getUsersBatch(lobby.members);
-        setUsernameMap(userMap);
-      } catch (err) {
-        console.error('Error fetching usernames:', err);
-      } finally {
-        setLoadingUsernames(false);
-      }
-    };
-    
-    fetchUsernames();
-  }, [lobby?.members]);
-
-  // Listen for lobby starting and stopping events
-  useEffect(() => {
-    if (!lobby) return;
-    
-    // TODO #socketLogic: Use this same logic for lobby join / update / leave in LobbyContext
-    // Model: Define the socket event in socket.js, then add the listeners
-    const removeStartingListener = onLobbyStarting((updatedLobby) => {
-      if (updatedLobby.id === lobby.id) {
-        console.log('Lobby is starting:', updatedLobby);
-        setActiveLobby(updatedLobby);
-        
-        // Request peer info when lobby is starting
-        getPeerInfo(updatedLobby.id)
-          .then(data => {
-            console.log('Peer connection info:', data);
-            // This would be used to establish P2P connections
-          })
-          .catch(err => console.error('Error getting peer info:', err));
-      }
-    });
-    
-    const removeStoppingListener = onLobbyStopping((updatedLobby) => {
-      if (updatedLobby.id === lobby.id) {
-        console.log('Lobby is stopping:', updatedLobby);
-        setActiveLobby(updatedLobby); // Originally setLobby(updatedLobby) in case this breaks
-      }
-    });
-    
-    return () => {
-      removeStartingListener();
-      removeStoppingListener();
-    };
-  }, [lobby?.id]);
-
   const handleCopyId = () => {
-    if (lobby) {
-      navigator.clipboard.writeText(lobby.id);
+    if (activeLobby) {
+      navigator.clipboard.writeText(activeLobby.id);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -137,17 +62,16 @@ function ActiveLobby({ lobbyData }) {
     e.preventDefault();
     setError('');
 
-    if (!lobby) return;
+    if (!activeLobby) return;
 
     try {
       // Call the API to update the lobby
-      const updatedLobby = await updateLobby(lobby.id, {
+      const updatedLobby = await updateLobby(activeLobby.id, {
         name: lobbyName,
         max_players: maxPlayers
       });
       
-      // Update local state with the response data
-      setLobby(updatedLobby);
+      // Update will come through socket, no need to set here
       setShowSettings(false);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update lobby');
@@ -155,11 +79,11 @@ function ActiveLobby({ lobbyData }) {
   };
   
   const handleStartLobby = async () => {
-    if (!lobby || actionInProgress) return;
+    if (!activeLobby || actionInProgress) return;
     
     setActionInProgress(true);
     try {
-      await startLobby(lobby.id);
+      await startLobby(activeLobby.id);
       // The actual lobby update will come through the socket
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to start lobby');
@@ -170,11 +94,11 @@ function ActiveLobby({ lobbyData }) {
   };
   
   const handleStopLobby = async () => {
-    if (!lobby || actionInProgress) return;
+    if (!activeLobby || actionInProgress) return;
     
     setActionInProgress(true);
     try {
-      await stopLobby(lobby.id);
+      await stopLobby(activeLobby.id);
       // The actual lobby update will come through the socket
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to stop lobby');
@@ -185,7 +109,7 @@ function ActiveLobby({ lobbyData }) {
   };
 
   // If no lobby data is available, show a loading state or return null
-  if (!lobby) {
+  if (!activeLobby) {
     return <div className="text-center py-10">Loading lobby...</div>;
   }
 
@@ -217,7 +141,7 @@ function ActiveLobby({ lobbyData }) {
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold">{lobby.name}</h2>
+          <h2 className="text-xl font-semibold">{activeLobby.name}</h2>
           <div className="flex space-x-2">
             {isHost && (
               <button 
@@ -301,7 +225,7 @@ function ActiveLobby({ lobbyData }) {
           >
             <div className="text-sm">
               <span className="text-muted-foreground mr-2">Lobby ID:</span>
-              <span className="font-mono">{lobby.id}</span>
+              <span className="font-mono">{activeLobby.id}</span>
             </div>
             <div className="flex items-center">
               {copied ? (
@@ -317,20 +241,20 @@ function ActiveLobby({ lobbyData }) {
         <div>
           <h3 className="text-sm font-medium flex items-center mb-2">
             <Users size={16} className="mr-2" />
-            Players ({lobby.members.length}/{lobby.max_players})
+            Players ({activeLobby.members.length}/{activeLobby.max_players})
           </h3>
           <div className="space-y-2">
-            {loadingUsernames && lobby.members.length > 0 && (
+            {loadingUsernames && activeLobby.members.length > 0 && (
               <div className="text-sm text-muted-foreground">Loading player information...</div>
             )}
-            {lobby.members.map((memberId) => (
+            {activeLobby.members.map((memberId) => (
               <div 
                 key={memberId}
                 className="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50"
               >
                 <div className="flex items-center">
                   <StatusIndicator 
-                    status={lobby.members_status?.[memberId] || "disconnected"} 
+                    status={activeLobby.members_status?.[memberId] || "disconnected"} 
                     className="mr-2"
                   />
                   <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mr-3">
@@ -340,7 +264,7 @@ function ActiveLobby({ lobbyData }) {
                   </div>
                   <div className="text-sm truncate">
                     {getUserDisplay(memberId)}
-                    {memberId === lobby.host && (
+                    {memberId === activeLobby.host && (
                       <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                         Host
                       </span>
@@ -355,14 +279,14 @@ function ActiveLobby({ lobbyData }) {
       
       <div className="bg-accent/50 p-4 flex justify-between items-center border-t border-border">
         <div className="text-sm flex items-center">
-          <StatusIndicator status={lobby.status || "idle"} className="mr-2" />
-          <span className="capitalize">{lobby.status || "idle"}</span>
+          <StatusIndicator status={activeLobby.status || "idle"} className="mr-2" />
+          <span className="capitalize">{activeLobby.status || "idle"}</span>
         </div>
         {isHost && (
-          lobby.status === "idle" ? (
+          activeLobby.status === "idle" ? (
             <button 
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm flex items-center gap-1.5"
-              disabled={lobby.members.length < 2 || actionInProgress}
+              disabled={activeLobby.members.length < 2 || actionInProgress}
               onClick={handleStartLobby}
             >
               <Play size={16} />

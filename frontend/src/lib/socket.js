@@ -20,32 +20,17 @@ const socket = io(backend, {
 socket.on('connect', () => {
   console.log('Socket connected successfully');
   
-  // Get token from localStorage
-  const userData = JSON.parse(localStorage.getItem('user'));
-  if (userData && userData.access_token) {
-    // Authenticate after connection
-    socket.emit('authenticate', { token: userData.access_token });
-  }
+  // TODO: Maybe add some code here later
 });
 
 socket.on('connected', (data) => {
   console.log('Server confirms connection:', data);
 });
 
-socket.on('authenticated', (data) => {
-  console.log('Authentication successful:', data);
-  
-  // Join user's personal room after authentication
-  const userData = JSON.parse(localStorage.getItem('user'));
-  if (userData && userData.user_id) {
-    // Refactorize this
-    joinRoom(`user:${userData.user_id}`);
-    console.log(`Joined personal room: user:${userData.user_id}`);
-  }
-});
-
 socket.on('auth_error', (error) => {
   console.error('Authentication error:', error);
+
+  // TODO: Maybe add some code here later
 });
 
 socket.on('disconnect', () => {
@@ -57,6 +42,10 @@ socket.on('disconnect', () => {
  * Called after successful login
  */
 export const initializeSocket = () => {
+  const userData = JSON.parse(localStorage.getItem('user'));
+  const token = userData.access_token;
+  console.log(token);
+  socket.auth = { token };   // attach auth payload
   socket.connect();
 };
 

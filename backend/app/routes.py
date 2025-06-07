@@ -7,6 +7,7 @@ from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity
 )
+from flask import copy_current_request_context
 
 bp = Blueprint('api', __name__)
 
@@ -62,7 +63,7 @@ def login():
         ip=user_ip,
         port=user_port
     )
-    online_user.save_to_redis(expire_seconds=20)  # 20 seconds initial TTL
+    online_user.save_to_redis(expire_seconds=60)  # 60 seconds initial TTL
 
     access_token = create_access_token(identity=user.id)
     return jsonify({
@@ -370,6 +371,34 @@ def start_lobby(lobby_id):
     
     # Notify all members about the lobby starting
     socketio.emit('lobby_starting', lobby.to_dict(), room=f"lobby_{lobby_id}")
+    
+    # Start a 15-second timer
+    @copy_current_request_context
+    def check_lobby_status():
+        socketio.sleep(15)
+        
+        # Re-fetch the lobby after 10 seconds
+        updated_lobby = Lobby.from_redis(lobby_id)
+        if not updated_lobby:
+            return
+        
+        # If lobby is already failed, do nothing
+        # TODO: Investigate why this check might not be working?
+        if updated_lobby.status == "failed":
+            return
+        
+        # If lobby is still in starting state, stop it
+        if updated_lobby.status == "starting":
+            updated_lobby.update(status="idle")
+            updated_lobby.set_all_members_status("disconnected")
+            updated_lobby.save_to_redis()
+            
+            # Notify all members about the lobby stopping
+            socketio.emit('lobby_stopping', updated_lobby.to_dict(), room=f"lobby_{lobby_id}")
+            current_app.logger.warning(f"Lobby {lobby_id} stopped due to timeout")
+    
+    # Start the background task
+    socketio.start_background_task(check_lobby_status)
     
     return jsonify({"message": "Starting lobby"}), 200
 

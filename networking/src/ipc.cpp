@@ -3,7 +3,7 @@
 
 // Updated constructor without P2PSystem dependency
 IPCServer::IPCServer()
-    : onGetStunInfo_(nullptr), onShutdown_(nullptr) {}
+    : onGetStunInfo_(nullptr), onShutdown_(nullptr), onStartConnection_(nullptr) {}
 
 IPCServer::~IPCServer() {
     ShutdownServer();
@@ -15,6 +15,10 @@ void IPCServer::setGetStunInfoCallback(GetStunInfoCallback callback) {
 
 void IPCServer::setShutdownCallback(ShutdownCallback callback) {
     onShutdown_ = callback;
+}
+
+void IPCServer::setStartConnectionCallback(StartConnectionCallback callback) {
+    onStartConnection_ = callback;
 }
 
 void IPCServer::RunServer(const std::string& server_address) {
@@ -98,6 +102,62 @@ grpc::Status IPCServer::StopProcess(grpc::ServerContext* context,
     reply->set_success(true);
     reply->set_message("Shutdown initiated");
     
+    return grpc::Status::OK;
+}
+
+grpc::Status IPCServer::StartConnection(grpc::ServerContext* context,
+                                      const peerbridge::StartConnectionRequest* request,
+                                      peerbridge::StartConnectionResponse* reply) {
+    std::cout << "IPCServer: StartConnection called" << std::endl;
+
+    // Check if callback is set
+    if (!onStartConnection_) {
+        std::string error_msg = "Start connection callback not set.";
+        reply->set_success(false);
+        reply->set_error_message(error_msg);
+        std::cerr << "IPCServer: Error: " << error_msg << std::endl;
+        return grpc::Status(grpc::StatusCode::INTERNAL, error_msg);
+    }
+
+    // Check for testing failure flag
+    if (request->should_fail()) {
+        std::string error_msg = "Connection failed due to shouldFail flag being set.";
+        reply->set_success(false);
+        reply->set_error_message(error_msg);
+        std::cout << "IPCServer: Simulating failure due to shouldFail flag" << std::endl;
+        return grpc::Status::OK;
+    }
+
+    // Convert peer_info from repeated string to vector
+    std::vector<std::string> peer_info;
+    for (int i = 0; i < request->peer_info_size(); i++) {
+        peer_info.push_back(request->peer_info(i));
+    }
+
+    int self_index = request->self_index();
+
+    // Display peer info for testing
+    std::cout << "IPCServer: Received peer info:" << std::endl;
+    for (size_t i = 0; i < peer_info.size(); i++) {
+        std::cout << "  " << i << ": " << peer_info[i];
+        if (i == self_index) {
+            std::cout << " (self)";
+        }
+        std::cout << std::endl;
+    }
+
+    // Call the callback to start the connection
+    bool success = onStartConnection_(peer_info, self_index);
+
+    reply->set_success(success);
+    if (success) {
+        reply->set_error_message("");
+        std::cout << "IPCServer: Connection setup successful" << std::endl;
+    } else {
+        reply->set_error_message("Failed to set up connection with peers");
+        std::cerr << "IPCServer: Connection setup failed" << std::endl;
+    }
+
     return grpc::Status::OK;
 }
 

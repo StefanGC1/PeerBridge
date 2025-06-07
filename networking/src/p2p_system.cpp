@@ -623,6 +623,37 @@ int P2PSystem::getPublicPort() const {
     return public_port_;
 }
 
+bool P2PSystem::startConnection(const std::vector<std::string>& peer_info, int self_index) {
+    if (on_status_) {
+        on_status_("Starting connection with peers...");
+    }
+    
+    // For now, just log the peer info
+    for (size_t i = 0; i < peer_info.size(); i++) {
+        if (i == self_index) {
+            if (on_status_) {
+                on_status_(std::string("Peer ") + std::to_string(i) + ": self");
+            }
+            continue;
+        }
+        
+        if (peer_info[i] == "unavailable") {
+            if (on_status_) {
+                on_status_(std::string("Peer ") + std::to_string(i) + ": unavailable");
+            }
+            continue;
+        }
+        
+        if (on_status_) {
+            on_status_(std::string("Peer ") + std::to_string(i) + ": " + peer_info[i]);
+        }
+    }
+    
+    // TODO: Implement actual connection logic here
+    // For testing, we'll just return success
+    return true;
+}
+
 bool P2PSystem::startIPCServer(const std::string& server_address) {
     // Create IPC server if it doesn't exist
     if (!ipc_server_) {
@@ -649,6 +680,11 @@ bool P2PSystem::startIPCServer(const std::string& server_address) {
                 // Signal the main loop to exit
                 running_ = false;
             }
+        });
+        
+        // Add start connection callback
+        ipc_server_->setStartConnectionCallback([this](const std::vector<std::string>& peer_info, int self_index) -> bool {
+            return this->startConnection(peer_info, self_index);
         });
     }
     

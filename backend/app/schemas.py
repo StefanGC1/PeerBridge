@@ -1,4 +1,5 @@
 from dataclasses import dataclass, asdict, field
+import math
 from typing import List, Dict, Optional, Any
 import json
 import uuid
@@ -11,6 +12,7 @@ class OnlineUser:
     user_id: str
     ip: str
     port: int
+    # TODO: This is redundant here, move this to db model if necessary
     last_active: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     
     @classmethod
@@ -50,7 +52,10 @@ class OnlineUser:
         
         # Set expiration if specified
         if expire_seconds is not None:
-            redis_inst.expire(key, expire_seconds)
+            if expire_seconds == math.inf:
+                redis_inst.persist(key)
+            else:
+                redis_inst.expire(key, expire_seconds)
         
         return True
     
@@ -80,7 +85,7 @@ class Lobby:
     name: str = "Unnamed Lobby"
     host: str = None
     members: List[str] = field(default_factory=list)
-    members_status: Dict[str, str] = field(default_factory=dict)  # Map of user_id -> status
+    members_status: Dict[str, str] = field(default_factory=dict)  # user_id -> status
     max_players: int = 4
     status: str = "idle"  # idle, starting, started, failed
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
@@ -91,7 +96,8 @@ class Lobby:
             self.members.append(self.host)
         
         # Set status to idle if not already set
-        self.status = "idle"
+        if not self.status:
+            self.status = "idle"
             
         # Initialize status for all members if not already set
         for member_id in self.members:

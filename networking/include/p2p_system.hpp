@@ -2,6 +2,7 @@
 #include "stun.hpp"
 #include "networking.hpp"
 #include "tun_interface.hpp"
+#include "ipc.hpp"
 // Forward declarations for IPCServer to avoid circular includes
 class IPCServer;
 
@@ -26,6 +27,7 @@ public:
     
     // Connection management
     bool connectToPeer(const std::string& peer_username);
+    bool startConnection(const std::vector<std::string>& peer_info, int self_index);
     void disconnect();
     
     // Network interface

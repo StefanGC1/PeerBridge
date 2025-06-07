@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electron', {
   // For network module communication
   grpc: {
     getStunInfo: () => ipcRenderer.invoke('grpc:getStunInfo'),
+    startConnection: (peerInfo, selfIndex, shouldFail) => 
+      ipcRenderer.invoke('grpc:startConnection', peerInfo, selfIndex, shouldFail),
     cleanup: () => ipcRenderer.invoke('grpc:cleanup'),
   },
   // We can add more APIs here as needed

@@ -15,6 +15,7 @@ public:
     // Define callback types
     using GetStunInfoCallback = std::function<std::pair<std::string, int>()>;
     using ShutdownCallback = std::function<void(bool)>; // bool parameter for force flag
+    using StartConnectionCallback = std::function<bool(const std::vector<std::string>&, int)>; // Returns success/failure
     
     // Constructor without P2PSystem dependency
     IPCServer();
@@ -26,6 +27,7 @@ public:
     // Callback setters
     void setGetStunInfoCallback(GetStunInfoCallback callback);
     void setShutdownCallback(ShutdownCallback callback);
+    void setStartConnectionCallback(StartConnectionCallback callback);
 
     // RPC method implementation for GetStunInfo
     grpc::Status GetStunInfo(grpc::ServerContext* context, 
@@ -36,6 +38,11 @@ public:
     grpc::Status StopProcess(grpc::ServerContext* context,
                             const peerbridge::StopProcessRequest* request,
                             peerbridge::StopProcessResponse* reply) override;
+                            
+    // RPC method implementation for StartConnection
+    grpc::Status StartConnection(grpc::ServerContext* context,
+                                const peerbridge::StartConnectionRequest* request,
+                                peerbridge::StartConnectionResponse* reply) override;
 
 private:
     std::unique_ptr<grpc::Server> server_;
@@ -43,6 +50,7 @@ private:
     // Callbacks
     GetStunInfoCallback onGetStunInfo_;
     ShutdownCallback onShutdown_;
+    StartConnectionCallback onStartConnection_;
 };
 
 #endif // IPC_HPP 
