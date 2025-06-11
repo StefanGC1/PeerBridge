@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import isDev from 'electron-is-dev';
 import { spawn } from 'child_process';
-import { initializeNetworking, getStunInfo, startConnection, cleanup } from './grpc.cjs';
+import { initializeNetworking, getStunInfo, startConnection, stopConnection, cleanup } from './grpc.cjs';
 
 import path from 'path';
 
@@ -93,6 +93,15 @@ ipcMain.handle('grpc:startConnection', async (event, peerInfo, selfIndex, should
       success: false, 
       errorMessage: error.message || 'Failed to start connection' 
     };
+  }
+});
+
+ipcMain.handle('grpc:stopConnection', async () => {
+  try {
+    await stopConnection();
+  } catch (error) {
+    console.error('Error in stopConnection:', error);
+    return { error: error.message || 'Failed to stop connection' };
   }
 });
 

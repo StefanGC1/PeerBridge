@@ -27,4 +27,21 @@ export const startConnectionWithPeers = async (peerInfo, selfIndex, shouldFail =
       errorMessage: error.message || 'Unknown error starting connection' 
     };
   }
-}; 
+};
+
+export const stopConnection = async () => {
+  try {
+    if (!window.electron?.grpc?.stopConnection) {
+      console.error('gRPC stopConnection not available');
+      return { success: false, errorMessage: 'gRPC stopConnection not available' };
+    }
+
+    console.log('Stopping connection');
+    const result = await window.electron.grpc.stopConnection();
+    console.log('Connection stopped:', result);
+    return result;
+  } catch (error) {
+    console.error('Error stopping connection:', error);
+    return { success: false, errorMessage: error.message || 'Unknown error stopping connection' };
+  }
+};

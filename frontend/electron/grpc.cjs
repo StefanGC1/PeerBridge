@@ -147,6 +147,21 @@ function startConnection(peerInfo, selfIndex, shouldFail = false) {
   });
 }
 
+function stopConnection() {
+  return new Promise((resolve, reject) => {
+    const client = connectGrpcClient();
+    client.stopConnection({}, (error, response) => {
+      if (error) {
+        console.error('Error stopping connection:', error);
+        reject(error);
+        return;
+      }
+      console.log("StopConnection response:", response);
+      resolve(response);
+    });
+  });
+}
+
 // Initialize the networking module and gRPC connection
 async function initializeNetworking() {
   try {
@@ -161,6 +176,10 @@ async function initializeNetworking() {
 
 // Cleanup function
 async function cleanup() {
+  if (!networkProcess) {
+    console.log("No network process to cleanup");
+    return;
+  }
   console.log("Stopping C++ module");
   const response = await stopProcess();
   console.log("C++ module stopped with response:", response);
@@ -173,5 +192,6 @@ module.exports = {
   initializeNetworking,
   getStunInfo,
   startConnection,
+  stopConnection,
   cleanup
 };

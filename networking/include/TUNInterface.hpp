@@ -1,5 +1,4 @@
-#ifndef TUN_INTERFACE_H
-#define TUN_INTERFACE_H
+#pragma once
 
 #include <string>
 #include <Windows.h>
@@ -10,22 +9,17 @@
 #include <memory>
 #include <vector>
 #include <mutex>
+#include <condition_variable>
 #include <queue>
 #include <boost/asio.hpp>
 
-// IP Protocol constants
-constexpr uint8_t IP_PROTO_ICMP = 1;
-constexpr uint8_t IP_PROTO_TCP = 6;
-constexpr uint8_t IP_PROTO_UDP = 17;
-
-// Add missing declarations needed for compilation
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 using WINTUN_PACKET = BYTE*;
 
-// Corrected declarations for WireGuard's Wintun API
+// TODO: Test if removing this is ok
 BOOL WINAPI WintunGetAdapterLUID(_In_ WINTUN_ADAPTER_HANDLE Adapter, _Out_ NET_LUID *Luid);
 
 #ifdef __cplusplus
@@ -40,23 +34,17 @@ public:
     // Callback types
     using PacketCallback = std::function<void(const std::vector<uint8_t>&)>;
 
-    // Initialize the TUN interface with a specified device name
-    bool initialize(const std::string& deviceName);
-
-    // Configure the TUN interface with an IP address, netmask, and gateway
-    bool configureInterface(const std::string& ipAddress, const std::string& netmask);
-
-    // Set up routing for the TUN interface
-    bool setupRouting();
+    // Initialize TUN adapter with a device name
+    bool initialize(const std::string&);
 
     // Start and stop packet processing
     bool startPacketProcessing();
     void stopPacketProcessing();
 
-    // Send a packet through the TUN interface
-    bool sendPacket(const std::vector<uint8_t>& packet);
+    // Add a packet to injection queue
+    bool sendPacket(std::vector<uint8_t>);
 
-    // Set callback for received packets
+    // Set callback for extracted packets
     void setPacketCallback(PacketCallback callback);
 
     // Check if the interface is running
@@ -65,14 +53,9 @@ public:
     // Close and clean up the TUN interface
     void close();
 
-    // Get the IP address of the interface
-    std::string getIPAddress() const;
-
-    // Get the local MAC address (for ARP responses)
-    std::vector<uint8_t> getVirtualMacAddress() const;
-
-    // Execute a netsh command to configure the interface
-    bool executeNetshCommand(const std::string& command);
+    // Getter for adapter alias
+    // We use this to make sure we get the exact name of the adapter
+    std::string getNarrowAlias() const;
 
 private:
     // Wintun session and adapter
@@ -90,6 +73,7 @@ private:
     typedef void (*WintunEndSessionFunc)(WINTUN_SESSION_HANDLE);
     typedef void (*WintunCloseAdapterFunc)(WINTUN_ADAPTER_HANDLE);
     typedef BOOL (*WintunGetAdapterLUIDFunc)(WINTUN_ADAPTER_HANDLE, NET_LUID*);
+    typedef HANDLE (*WintunGetReadWaitEventFunc)(WINTUN_SESSION_HANDLE);
     typedef BOOL (*WintunDeleteDriverFunc)(void);
     
     // Wintun function pointers
@@ -103,36 +87,27 @@ private:
     WintunEndSessionFunc pWintunEndSession = nullptr;
     WintunCloseAdapterFunc pWintunCloseAdapter = nullptr;
     WintunGetAdapterLUIDFunc pWintunGetAdapterLUID = nullptr;
+    WintunGetReadWaitEventFunc pWintunGetReadWaitEvent = nullptr;
     WintunDeleteDriverFunc pWintunDeleteDriver = nullptr;
 
     // State management
-    std::atomic<bool> running_{false};
-    std::mutex packetQueueMutex_;
-    std::queue<std::vector<uint8_t>> outgoingPackets_;
+    std::atomic<bool> running{false};
+    std::mutex packetQueueMutex;
+    std::condition_variable packetConditionVariable;
+    std::queue<std::vector<uint8_t>> outgoingPackets;
     
     // Thread for packet processing
-    std::thread receiveThread_;
-    std::thread sendThread_;
+    std::thread receiveThread;
+    std::thread sendThread;
     
     // Callback for received packets
-    PacketCallback packetCallback_;
-    
-    // Configuration
-    std::string ipAddress_;
-    std::string netmask_;
-    std::vector<uint8_t> virtualMac_;
+    PacketCallback packetCallback;
     
     // Interface management
-    bool loadWintunFunctions(HMODULE wintunModule);
+    bool loadWintunFunctions(HMODULE);
     void receiveThreadFunc();
     void sendThreadFunc();
     
-    // IP helper functions
-    uint32_t ipToUint32(const std::string& ipAddress);
-    std::string uint32ToIp(uint32_t ipAddress);
-    
     // System's network interfaces
-    HMODULE wintunModule_ = nullptr;
+    HMODULE wintunModule = nullptr;
 };
-
-#endif // TUN_INTERFACE_H

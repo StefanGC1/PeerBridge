@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 import axiosInstance from './axios';
 
 // Create a socket instance - connect to same host as API
-const backend = "https://striking-washer-hist-range.trycloudflare.com";
+const backend = "https://sector-classic-ear-ecommerce.trycloudflare.com";
 const socket = io(backend, {
   autoConnect: false, // Don't connect automatically, we'll do it after auth
   transports: ['websocket', 'polling'], // Try WebSocket first, fall back to polling

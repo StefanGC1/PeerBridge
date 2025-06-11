@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useRef } from 'r
 import socket from '../lib/socket';
 import { joinLobbyRoom, leaveLobbyRoom, onLobbyStarting, onLobbyStopping } from '../lib/socket';
 import { getUsersBatch, getPeerInfo } from '../lib/api';
-import { startConnectionWithPeers } from '../lib/networking';
+import { startConnectionWithPeers, stopConnection } from '../lib/networking';
 
 // Helper function to check if two arrays have the same elements
 const areArraysEqual = (a, b) => {
@@ -75,7 +75,7 @@ export function LobbyProvider({ children }) {
             return startConnectionWithPeers(
               peerInfo.peer_info,
               peerInfo.self_index,
-              true // shouldFail - set to false by default
+              false // shouldFail - set to false by default
             );
           })
           .then(result => {
@@ -103,10 +103,15 @@ export function LobbyProvider({ children }) {
     });
     
     // Listen for lobby stopping
-    const removeStoppingListener = onLobbyStopping((updatedLobby) => {
+    const removeStoppingListener = onLobbyStopping(async (updatedLobby) => {
       if (updatedLobby.id === activeLobby.id) {
         console.log('Lobby is stopping:', updatedLobby);
         setActiveLobby(updatedLobby);
+        try {
+          await stopConnection();
+        } catch (error) {
+          console.error('Error stopping connection:', error);
+        }
       }
     });
 

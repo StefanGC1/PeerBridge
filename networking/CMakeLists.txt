@@ -4,16 +4,14 @@ project(PeerBridgeNet)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Boost REQUIRED COMPONENTS system filesystem thread)
+find_package(Boost REQUIRED COMPONENTS system filesystem thread stacktrace_windbg)
 find_package(PkgConfig REQUIRED)
 
-# Use pkg-config to find gRPC and Protobuf
-# This is often more reliable in MSYS2/MinGW environments
 pkg_check_modules(GRPC REQUIRED grpc++ grpc)
-# Add other gRPC dependencies if linker errors persist for them (e.g., absl_base, cares, etc.)
 pkg_check_modules(PROTOBUF REQUIRED protobuf)
+pkg_check_modules(QUILL REQUIRED quill)
 
-# Explicitly find protoc and grpc_cpp_plugin to ensure full paths
+# Find protoc and grpc_cpp_plugin
 find_program(PROTOC_EXECUTABLE NAMES protoc HINTS ENV Protobuf_ROOT PATHS ENV PATH ${PROTOBUF_PREFIX}/bin)
 find_program(GRPC_CPP_PLUGIN_EXECUTABLE NAMES grpc_cpp_plugin HINTS ENV GRPC_ROOT PATHS ENV PATH ${GRPC_PREFIX}/bin)
 
@@ -29,25 +27,17 @@ message(STATUS "Found grpc_cpp_plugin: ${GRPC_CPP_PLUGIN_EXECUTABLE}")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSODIUM REQUIRED libsodium)
-pkg_check_modules(OPENSSL REQUIRED openssl)
-pkg_check_modules(ZLIB REQUIRED zlib)
-
-set(NLOHMANN_INCLUDEDIR "${CMAKE_SOURCE_DIR}/external/nlohmann/include")
-
-set(IXWS_ROOT "${CMAKE_SOURCE_DIR}/external/ixwebsocket")
-set(IXWS_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external/ixwebsocket/include")
-set(IXWS_LIBRARY "${CMAKE_SOURCE_DIR}/external/ixwebsocket/lib/libixwebsocket.a")
 
 set(WINTUN_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/wintun/include")
 message(STATUS "wintun: ${WINTUN_INCLUDE_DIR}")
 set(WINTUN_DLL_DIR "${CMAKE_SOURCE_DIR}/wintun/bin")
 
-# Create proto directory if it doesn't exist
+# Create proto directory
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 
 # Proto files configuration
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
-get_filename_component(PROTO_DIR_ABS ${PROTO_DIR} ABSOLUTE) # Absolute path for protoc command
+get_filename_component(PROTO_DIR_ABS ${PROTO_DIR} ABSOLUTE) 
 
 set(PROTO_FILES
     ${PROTO_DIR}/PeerBridge.proto
@@ -57,7 +47,6 @@ set(PROTO_FILES
 set(GENERATED_PROTO_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated-sources/protobuf)
 file(MAKE_DIRECTORY ${GENERATED_PROTO_DIR})
 
-# Prepare lists for generated source files
 set(GENERATED_PROTO_SRCS)
 
 # Loop through each .proto file to define custom commands for C++ generation
@@ -88,21 +77,21 @@ endforeach()
 
 message(STATUS "Generated Proto sources: ${GENERATED_PROTO_SRCS}")
 
-include_directories(${IXWS_INCLUDE_DIRS})
-link_directories(${IXWS_ROOT}/lib)
-
 include_directories(${WINTUN_INCLUDE_DIR})
 
 # Project source and header files
 include_directories("${CMAKE_SOURCE_DIR}/include")
 set(SOURCES
     src/main.cpp
-    src/crypto.cpp
-    src/networking.cpp
-    src/stun.cpp
-    src/p2p_system.cpp
-    src/tun_interface.cpp
-    src/ipc.cpp
+    src/Crypto.cpp
+    src/NetworkingModule.cpp
+    src/Stun.cpp
+    src/P2PSystem.cpp
+    src/TUNInterface.cpp
+    src/Logger.cpp
+    src/NetworkConfigManager.cpp
+    src/SystemStateManager.cpp
+    src/IPCServer.cpp
 )
 
 set(PROTO_SOURCES ${GENERATED_PROTO_SRCS}) # Add the generated .pb.cc and .grpc.pb.cc files
@@ -122,10 +111,6 @@ target_sources(PeerBridgeNet PRIVATE ${ADMIN_RC})
 target_include_directories(PeerBridgeNet PRIVATE
     ${Boost_INCLUDE_DIRS}
     ${LIBSODIUM_INCLUDE_DIRS}
-    ${OPENSSL_INCLUDE_DIRS}
-    ${ZLIB_INCLUDE_DIRS}
-    ${JSONCPP_INCLUDE_DIRS}
-    ${NLOHMANN_INCLUDEDIR}
     ${PROTOBUF_INCLUDE_DIRS}  # From pkg_check_modules
     ${GRPC_INCLUDE_DIRS}      # From pkg_check_modules
     ${GENERATED_PROTO_DIR}    
@@ -136,10 +121,9 @@ target_include_directories(PeerBridgeNet PRIVATE
 # Link libraries
 target_link_libraries(PeerBridgeNet PRIVATE
     ${Boost_LIBRARIES}
+    Boost::stacktrace_windbg
+    dbghelp
     ${LIBSODIUM_LIBRARIES}
-    ${IXWS_LIBRARY}
-    ${OPENSSL_LIBRARIES}
-    ${ZLIB_LIBRARIES}
     ${GRPC_LIBRARIES}         # From pkg_check_modules
     ${PROTOBUF_LIBRARIES}     # From pkg_check_modules
     ws2_32
@@ -156,6 +140,7 @@ add_custom_command(TARGET PeerBridgeNet POST_BUILD
     )
 
 target_compile_definitions(PeerBridgeNet PRIVATE IXWEBSOCKET_USE_TLS)
+target_compile_definitions(PeerBridgeNet PRIVATE SOURCE_ROOT_DIR="${CMAKE_SOURCE_DIR}/src/")
 
 #### POST-BUILD PACKAGING ####
 
@@ -171,15 +156,6 @@ if(ENABLE_DEP_COPY)
         VERBATIM
     )
     add_dependencies(copy_deps PeerBridgeNet)
-
-    # Copy generated proto files to release directory
-    # TODO: Remove copying proto generated files as they are not needed for the .exe
-    # add_custom_command(TARGET copy_deps POST_BUILD
-    #     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-    #         "${GENERATED_PROTO_DIR}/" # Source directory for generated files (updated from PROTO_OUTPUT_DIR)
-    #         "${CMAKE_BINARY_DIR}/release/proto_gen/" # Destination directory
-    #     COMMENT "Copying generated proto files to release/proto_gen"
-    # )
 
     # Install step: include the release folder contents in the package
     # NOTE: This might not be necessary anymore

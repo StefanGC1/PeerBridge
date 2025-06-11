@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const backend = "https://striking-washer-hist-range.trycloudflare.com";
+const backend = "https://sector-classic-ear-ecommerce.trycloudflare.com";
 const backend2 = "http://localhost:5000";
 const axiosInstance = axios.create({
   baseURL: backend, // Replace with your API base URL

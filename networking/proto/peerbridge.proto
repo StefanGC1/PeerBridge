@@ -10,6 +10,8 @@ service PeerBridgeService {
     rpc StopProcess (StopProcessRequest) returns (StopProcessResponse);
     // RPC to start connection with peers
     rpc StartConnection (StartConnectionRequest) returns (StartConnectionResponse);
+    // RPC to stop the current P2P connection
+    rpc StopConnection (StopConnectionRequest) returns (StopConnectionResponse);
 }
 
 // Request message for GetStunInfo
@@ -47,4 +49,15 @@ message StartConnectionRequest {
 message StartConnectionResponse {
     bool success = 1;
     string error_message = 2;
+}
+
+// Request message for StopConnection
+message StopConnectionRequest {
+    // Currently empty, may add parameters in the future
+}
+
+// Response message for StopConnection
+message StopConnectionResponse {
+    bool success = 1;
+    string message = 2;
 } 

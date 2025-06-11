@@ -1,72 +1,100 @@
-#include "p2p_system.hpp"
-#include "logger.hpp"
+#include "P2PSystem.hpp"
+#include "Logger.hpp"
 #include <iostream>
 #include <string>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <signal.h>
+#include <csignal>
+#include <boost/stacktrace.hpp>
 
 // Global variables
 static std::atomic<bool> g_running = true;
-static std::unique_ptr<P2PSystem> g_system;
+static std::unique_ptr<P2PSystem> p2pSystem;
 
 // Signal handler for graceful shutdown
-void signal_handler(int signal) {
-    clog << "Signal received: " << signal << ". Shutting down." << std::endl;
-    // TODO: Set the g_running of the p2p_system to false.
+void signalHandler(int signal)
+{
     g_running = false;
 }
 
-int main(int argc, char* argv[]) {
-    // Setup signal handlers
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+static std::string stackTraceToString()
+{
+    std::ostringstream oss;
+    oss << boost::stacktrace::stacktrace();
+    return oss.str();
+}
 
-    std::string username = "default_user";
-    
-    const std::string server_url = "wss://cfea-86-125-92-244.ngrok-free.app";
-    int local_port = 0;
-    
-    g_system = std::make_unique<P2PSystem>();
-    
-    g_system->setStatusCallback([](const std::string& status) {
-        clog << "[P2P Status] " << status << std::endl;
-        // I will strangle myself with this fix
-        if (status == "Disconnected") {
-            g_running = false;
+static void onTerminate()
+{
+    // if there’s an active exception, try to get its what()
+    if (auto eptr = std::current_exception())
+    {
+        try { std::rethrow_exception(eptr); }
+        catch (std::exception const& ex)
+        {
+            SYSTEM_LOG_ERROR("Unhandled exception: {}", ex.what());
         }
-    });
-    
-    g_system->setConnectionCallback([](bool connected, const std::string& peer) {
-        if (connected) {
-            clog << "[P2P System] Connected to " << peer << std::endl;
-        } else {
-            clog << "[P2P System] Disconnected from " << peer << std::endl;
+        catch (...)
+        {
+            SYSTEM_LOG_ERROR("Unhandled non-std exception");
         }
-    });
+    }
+    else
+    {
+        SYSTEM_LOG_ERROR("Terminate called without an exception");
+    }
+    SYSTEM_LOG_ERROR("Stack trace:\n{}", stackTraceToString());
+    std::_Exit(EXIT_FAILURE);  // immediate exit
+}
+
+// Called on fatal signals
+static void onSignal(int sig)
+{
+    SYSTEM_LOG_ERROR("Received signal: {}", sig);
+    SYSTEM_LOG_ERROR("Stack trace:\n{}", stackTraceToString());
+    std::_Exit(EXIT_FAILURE);
+}
+
+int main(int argc, char* argv[])
+{
+    // Init logging
+    initLogging();
+    // Setup signal handlers
+    std::set_terminate(onTerminate);
+
+    signal(SIGINT, signalHandler);
+    std::signal(SIGSEGV, onSignal);
+    std::signal(SIGABRT, onSignal);
+    std::signal(SIGFPE, onSignal);
+    std::signal(SIGILL, onSignal);
+    std::signal(SIGTERM, onSignal);
     
-    g_system->setConnectionRequestCallback([](const std::string& from) {
-        clog << "[P2P Request] " << from << " wants to connect." << std::endl;
-    });
+    // TODO: Disable network traffic logging in prod
+    setShouldLogTraffic(true);
+
+    SYSTEM_LOG_INFO("Starting P2P System application...");
+    int localPort = 0; // Let system automatically choose a port
+    p2pSystem = std::make_unique<P2PSystem>();
     
-    if (!g_system->initialize(server_url, username, local_port)) {
-        std::cerr << "Failed to initialize the P2P system. Exiting." << std::endl;
+    // Initialize the application
+    if (!p2pSystem->initialize(localPort))
+    {
+        SYSTEM_LOG_ERROR("Failed to initialize the application. Exiting.");
         return 1;
     }
-
-    clog << "PeerBridge C++ module running. Waiting for IPC commands or termination signal." << std::endl;
     
-    while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    SYSTEM_LOG_INFO("P2P System initialized successfully. Main thread going to sleep.");
+    // Main loop (status updates, etc.)
+    while (g_running)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     
-    clog << "Initiating shutdown..." << std::endl;
-
-    if (g_system) {
-        g_system->disconnect(); // This will also stop the IPC server
-    }
+    // Cleanup - use full shutdown at program exit
+    p2pSystem->shutdown();
     
-    clog << "Application exiting. Goodbye!" << std::endl;
+    SYSTEM_LOG_INFO("Application exiting. Goodbye!");
     return 0;
 }
