@@ -1,13 +1,22 @@
 #include "IPCServer.hpp"
+#include "SystemStateManager.hpp"
+#include "Utils.hpp"
 #include "Logger.hpp"
 #include <iostream>
+#include <vector>
+#include <map>
 
 // Updated constructor without P2PSystem dependency
-IPCServer::IPCServer()
+IPCServer::IPCServer(
+    std::shared_ptr<SystemStateManager> stateManager,
+    NetworkConfigManager& networkConfigManager)
     : getStunInfoCallback(nullptr)
     , shutdownCallback(nullptr)
     , startConnectionCallback(nullptr)
-    , stopConnectionCallback(nullptr) {}
+    , stopConnectionCallback(nullptr)
+    , stateManager(stateManager)
+    , networkConfigManager(networkConfigManager)
+{}
 
 IPCServer::~IPCServer()
 {
@@ -167,6 +176,7 @@ grpc::Status IPCServer::StartConnection(
     }
 
     int self_index = request->self_index();
+    SYSTEM_LOG_INFO("[IPCServer]: Self index: {}", self_index);
 
     // Display peer info for testing
     SYSTEM_LOG_INFO("[IPCServer]: Received peer info:");
@@ -175,15 +185,37 @@ grpc::Status IPCServer::StartConnection(
         SYSTEM_LOG_INFO("[IPCServer] {}: {}", i, peerInfo[i]);
     }
 
-    // Call the callback to start the connection
-    // bool success = startConnectionCallback(peerInfo, self_index);
+    // Parse peer info
+    NetworkConfigManager::SetupConfig setupConfig = networkConfigManager.getSetupConfig();
+    auto peerMap = utils::parsePeerInfo(peerInfo, setupConfig.IP_SPACE, self_index);
+
+    if (peerMap.empty())
+    {
+        std::string errorMsg = "No valid peer info received.";
+        reply->set_success(false);
+        reply->set_error_message(errorMsg);
+        SYSTEM_LOG_ERROR("[IPCServer]: Error: {}", errorMsg);
+        return grpc::Status::OK;
+    }
+
+    SYSTEM_LOG_INFO("[IPCServer]: Parsed following peer map:");
+    for (const auto& [virtualIp, publicIpAndPort] : peerMap)
+    {
+        SYSTEM_LOG_INFO("[IPCServer] Virtual IP: {}, Public IP: {}, Port: {}",
+            utils::uint32ToIp(virtualIp),
+            utils::uint32ToIp(publicIpAndPort.first),
+            publicIpAndPort.second);
+    }
+
+    SYSTEM_LOG_INFO("[IPCServer]: Queueing initialize connection event");
+    stateManager->queueEvent(NetworkEventData(NetworkEvent::INITIALIZE_CONNECTION, std::make_pair(self_index, peerMap)));
     bool success = true;
 
     reply->set_success(success);
     if (success)
     {
         reply->set_error_message("");
-        SYSTEM_LOG_INFO("[IPCServer]: Connection setup successful");
+        SYSTEM_LOG_INFO("[IPCServer]: Connection initialized successfully");
     }
     else 
     {
@@ -213,19 +245,8 @@ grpc::Status IPCServer::StopConnection(
 
     // Call the callback to stop the connection
     bool success = false;
-    try
-    {
-        // success = stopConnectionCallback();
-        success = true;
-    }
-    catch (const std::exception& e)
-    {
-        SYSTEM_LOG_ERROR("[IPCServer]: Error in stop connection callback: {}", e.what());
-        success = false;
-        reply->set_success(success);
-        reply->set_message(e.what());
-        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
-    }
+    stateManager->queueEvent(NetworkEventData(NetworkEvent::DISCONNECT_ALL_REQUESTED));
+    success = true;
 
     reply->set_success(success);
     if (success)
@@ -239,6 +260,15 @@ grpc::Status IPCServer::StopConnection(
         SYSTEM_LOG_ERROR("[IPCServer]: Failed to stop connection");
     }
 
+    return grpc::Status::OK;
+}
+
+grpc::Status IPCServer::GetConnectionStatus(
+    grpc::ServerContext* context,
+    const peerbridge::GetConnectionStatusRequest* request,
+    peerbridge::GetConnectionStatusResponse* reply)
+{
+    // Empty implementation
     return grpc::Status::OK;
 }
 

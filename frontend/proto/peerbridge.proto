@@ -12,6 +12,16 @@ service PeerBridgeService {
     rpc StartConnection (StartConnectionRequest) returns (StartConnectionResponse);
     // RPC to stop the current P2P connection
     rpc StopConnection (StopConnectionRequest) returns (StopConnectionResponse);
+    // RPC to get connection status
+    rpc GetConnectionStatus (GetConnectionStatusRequest) returns (GetConnectionStatusResponse);
+}
+
+// Connection status enum
+enum ConnectionStatus {
+    IDLE = 0;
+    CONNECTING = 1; 
+    CONNECTED = 2;
+    SHUTTING_DOWN = 3;
 }
 
 // Request message for GetStunInfo
@@ -60,4 +70,14 @@ message StopConnectionRequest {
 message StopConnectionResponse {
     bool success = 1;
     string message = 2;
+}
+
+// Request message for GetConnectionStatus
+message GetConnectionStatusRequest {
+    // Empty - no parameters needed
+}
+
+// Response message for GetConnectionStatus  
+message GetConnectionStatusResponse {
+    ConnectionStatus status = 1;
 } 

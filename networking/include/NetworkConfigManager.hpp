@@ -1,19 +1,9 @@
+#pragma once
+
 #include <string>
 #include <guiddef.h>
 #include <cstdint>
 #include <iphlpapi.h>
-
-namespace NetworkConstants
-{
-inline constexpr const wchar_t* INTERFACE_NAME = L"PeerBridge";
-inline constexpr const wchar_t* TUNNEL_TYPE = L"WINTUN";
-
-inline constexpr char const* NET_MASK = "255.255.255.0";
-inline constexpr char const* MULTICAST_SUBNET_RANGE = "224.0.0.0/4";
-
-inline constexpr uint8_t START_IP_INDEX = 1;
-inline constexpr uint8_t BASE_IP_INDEX = 0;
-}
 
 class NetworkConfigManager
 {
@@ -35,11 +25,8 @@ public:
 
     struct ConnectionConfig
     {
-        // TODO: TO BE MODIFIED FOR *1
-        uint8_t selfIndex;
-        // TODO: TO BE MODIFIED FOR *1
-        // For now, it will always equal 1
-        std::string peerVirtualIp;
+        std::string selfVirtualIp;
+        std::vector<std::string> peerVirtualIps;
     };
 
     // TODO: Once config file implemented,
@@ -51,11 +38,13 @@ public:
     bool setupRouting(const ConnectionConfig&);
     void setupFirewall();
 
-    void resetInterfaceConfiguration(const std::string&);
-    bool removeRouting(const std::string&);
+    void resetInterfaceConfiguration(const std::vector<std::string>&);
+    bool removeRouting(const std::vector<std::string>&);
     void removeFirewall();
 
     void setNarrowAlias(const std::string&);
+
+    SetupConfig getSetupConfig();
 
 private:
     RouteConfigApproach routeApproach = RouteConfigApproach::GENERIC_ROUTE;

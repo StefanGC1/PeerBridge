@@ -1,4 +1,6 @@
 #pragma once
+#include "SystemStateManager.hpp"
+#include "NetworkConfigManager.hpp"
 #include <string>
 #include <functional>
 #include <memory>
@@ -12,7 +14,6 @@
 #include <boost/asio.hpp>
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include "SystemStateManager.hpp"
 
 class UDPNetwork {
 public:
@@ -21,12 +22,13 @@ public:
     UDPNetwork(
         std::unique_ptr<boost::asio::ip::udp::socket>,
         boost::asio::io_context&,
-        std::shared_ptr<SystemStateManager>);
+        std::shared_ptr<SystemStateManager>,
+        NetworkConfigManager&);
     ~UDPNetwork();
     
     // Setup and connection
     bool startListening(int port);
-    bool connectToPeer(const std::string& ip, int port);
+    bool startConnection(uint32_t, std::map<uint32_t, std::pair<std::uint32_t, int>>);
     
     // Disconnet and shutdown
     void stopConnection();
@@ -34,16 +36,19 @@ public:
     
     bool isConnected() const;
     
-    // Async operations, sending to peer, called from TUNInterface
-    bool sendMessage(const std::vector<uint8_t>& data);
+    // Async operations, sending to peer, queued by TUNInterface
+    void processPacketFromTun(const std::vector<uint8_t>&);
+    bool sendMessage(
+        const std::vector<uint8_t>& data,
+        const boost::asio::ip::udp::endpoint& peerEndpoint);
     void setMessageCallback(MessageCallback callback);
-    
-    // Graceful disconnection
-    void sendDisconnectNotification();
     
     // Get local information
     int getLocalPort() const;
     std::string getLocalAddress() const;
+
+    // External handle to IOContext
+    boost::asio::io_context& getIOContext();
 
 private:
      // Packet types
@@ -66,15 +71,19 @@ private:
         std::size_t, 
         std::shared_ptr<std::vector<uint8_t>>, 
         std::shared_ptr<boost::asio::ip::udp::endpoint>);
-    void processMessage(std::vector<uint8_t>, const boost::asio::ip::udp::endpoint&);
-    void handleSendComplete(const boost::system::error_code&, std::size_t, uint32_t);
+    void deliverPacketToTun(const std::vector<uint8_t>);
+    void handleSendComplete(
+        const boost::system::error_code&,
+        std::size_t, uint32_t,
+        const boost::asio::ip::udp::endpoint&);
     
-    // Internal disconnect handler
-    void handleDisconnect();
+    // Disconnect handlers
+    void handleDisconnect(boost::asio::ip::udp::endpoint, bool = false);
+    void sendDisconnectNotification(const boost::asio::ip::udp::endpoint&);
 
     // UDP hole punching
-    void startHolePunchingProcess(const boost::asio::ip::udp::endpoint&);
-    void sendHolePunchPacket();
+    void startHolePunchingProcess();
+    void sendHolePunchPacket(const boost::asio::ip::udp::endpoint&);
     
     // Connection management
     void checkAllConnections();
@@ -112,6 +121,11 @@ private:
     std::mutex pendingAcksMutex;
     
     // Peer connection management
+    std::map<uint32_t, std::pair<std::uint32_t, int>> virtualIpToPublicIp;
+    std::map<uint32_t, PeerConnectionInfo> publicIpToPeerConnection;
+    uint32_t selfVirtualIp;
+
+    // TODO: REMOVE
     boost::asio::ip::udp::endpoint peerEndpoint;
     PeerConnectionInfo peerConnection;
     // TODO: FOR *1, SEE HOW THIS WILL CHANGE FOR MULTIPLE PEERS
@@ -123,6 +137,7 @@ private:
     
     // State manager for event queuing
     std::shared_ptr<SystemStateManager> stateManager;
+    NetworkConfigManager& networkConfigManager;
     
     // Callbacks
     MessageCallback onMessageCallback;

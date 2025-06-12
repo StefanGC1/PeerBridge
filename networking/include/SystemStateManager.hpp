@@ -1,4 +1,5 @@
 #pragma once
+
 #include <mutex>
 #include <chrono>
 #include <atomic>
@@ -6,9 +7,12 @@
 #include <optional>
 #include <variant>
 #include <string>
+#include <map>
+#include <boost/asio/ip/udp.hpp>
 
 // System states
-enum class SystemState {
+enum class SystemState
+{
     IDLE,
     CONNECTING,
     CONNECTED,
@@ -16,16 +20,37 @@ enum class SystemState {
 };
 
 // Network event types, used for transitions
-enum class NetworkEvent {
+enum class NetworkEvent
+{
+    INITIALIZE_CONNECTION,
+    DISCONNECT_ALL_REQUESTED,
     PEER_CONNECTED,
+    PEER_DISCONNECTED,
     ALL_PEERS_DISCONNECTED,
     SHUTDOWN_REQUESTED
 };
 
+inline std::string toString(SystemState state)
+{
+    switch (state) 
+    {
+        case SystemState::IDLE: return "IDLE";
+        case SystemState::CONNECTING: return "CONNECTING";
+        case SystemState::CONNECTED: return "CONNECTED";
+        case SystemState::SHUTTING_DOWN: return "SHUTTING_DOWN";
+        default: return "UNKNOWN";
+    }
+}
+
 // Event data to be sent by the network module
-struct NetworkEventData {
+struct NetworkEventData
+{
+    using SelfIndexAndPeerMap = std::pair<int, std::map<uint32_t, std::pair<std::uint32_t, int>>>;
     NetworkEvent event;
-    std::variant<std::string, std::monostate> data;
+    std::variant<
+        std::monostate,
+        std::string,
+        SelfIndexAndPeerMap> data;
     std::chrono::steady_clock::time_point timestamp; // UNUSED
     
     // Constructor for events with string data
@@ -35,10 +60,15 @@ struct NetworkEventData {
     // Constructor for events without data
     NetworkEventData(NetworkEvent e) 
         : event(e), data(std::monostate{}), timestamp(std::chrono::steady_clock::now()) {}
+
+    // Constructor for events with peer map
+    NetworkEventData(NetworkEvent e, const SelfIndexAndPeerMap& peerMap)
+        : event(e), data(peerMap), timestamp(std::chrono::steady_clock::now()) {}
 };
 
 // Manages the overall system state
-class SystemStateManager {
+class SystemStateManager
+{
 public:
     SystemStateManager();
 
@@ -62,9 +92,11 @@ private:
 };
 
 // Tracks information about a peer connection
-class PeerConnectionInfo {
+class PeerConnectionInfo
+{
 public:
     PeerConnectionInfo();
+    PeerConnectionInfo(const boost::asio::ip::udp::endpoint&);
     
     // Last active time (receive timestamp)
     void updateActivity();
@@ -73,11 +105,15 @@ public:
     // Connection state
     void setConnected(bool);
     bool isConnected() const;
+
+    // Access peer endpoint
+    boost::asio::ip::udp::endpoint getPeerEndpoint() const;
     
     // Access last activity time for monitoring
     std::chrono::steady_clock::time_point getLastActivity() const;
     
 private:
-    std::atomic<std::chrono::steady_clock::time_point> lastActivity;
-    std::atomic<bool> connected;
+    std::chrono::steady_clock::time_point lastActivity;
+    bool connected;
+    boost::asio::ip::udp::endpoint peerEndpoint;
 };

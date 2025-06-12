@@ -1,5 +1,6 @@
 #include "SystemStateManager.hpp"
 #include "Logger.hpp"
+#include <boost/asio/ip/udp.hpp>
 
 SystemStateManager::SystemStateManager() : currentState(SystemState::IDLE) {}
 
@@ -40,13 +41,13 @@ void SystemStateManager::setState(SystemState newState)
     if (!isValidTransition(current, newState))
     {
         SYSTEM_LOG_WARNING("[StateManager] Invalid transition from {} to {}", 
-                          static_cast<int>(current), static_cast<int>(newState));
+                          toString(current), toString(newState));
         return;
     }
     
     currentState.store(newState, std::memory_order_release);
     SYSTEM_LOG_INFO("[StateManager] State transition: {} -> {}", 
-                    static_cast<int>(current), static_cast<int>(newState));
+                    toString(current), toString(newState));
 }
 
 SystemState SystemStateManager::getState() const
@@ -91,22 +92,27 @@ PeerConnectionInfo::PeerConnectionInfo() : connected(false)
     updateActivity();
 }
 
+PeerConnectionInfo::PeerConnectionInfo(const boost::asio::ip::udp::endpoint& endpoint) : connected(false)
+{
+    peerEndpoint = endpoint;
+    updateActivity();
+}
+
 void PeerConnectionInfo::updateActivity()
 {
-    lastActivity.store(std::chrono::steady_clock::now(), std::memory_order_release);
+    lastActivity = std::chrono::steady_clock::now();
 }
 
 bool PeerConnectionInfo::hasTimedOut(int timeoutSeconds) const
 {
-    auto lastActivity_ = lastActivity.load(std::memory_order_acquire);
     auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity_).count();
-    return (elapsed > timeoutSeconds) && connected.load(std::memory_order_acquire);
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity).count();
+    return (elapsed > timeoutSeconds) && connected;
 }
 
 void PeerConnectionInfo::setConnected(bool connected_)
 {
-    connected.store(connected_, std::memory_order_release);
+    connected = connected_;
     if (connected_)
     {
         updateActivity();
@@ -114,9 +120,14 @@ void PeerConnectionInfo::setConnected(bool connected_)
 }
 
 bool PeerConnectionInfo::isConnected() const {
-    return connected.load(std::memory_order_acquire);
+    return connected;
 }
 
 std::chrono::steady_clock::time_point PeerConnectionInfo::getLastActivity() const {
-    return lastActivity.load(std::memory_order_acquire);
-} 
+    return lastActivity;
+}
+
+boost::asio::ip::udp::endpoint PeerConnectionInfo::getPeerEndpoint() const
+{
+    return peerEndpoint;
+}

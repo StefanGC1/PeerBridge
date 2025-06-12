@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include <winsock2.h>
 #include <windows.h>
+#include <winsock2.h>
 #include <ipexport.h>
 #include <ifdef.h>
 #include <ws2ipdef.h>

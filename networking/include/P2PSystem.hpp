@@ -23,11 +23,7 @@ public:
     ~P2PSystem();
     
     // Initialization
-    // TODO: REFACTORIZE FOR *1
     bool initialize(int = 0);
-    
-    // Connection
-    bool connectToPeer(const std::string&);
     
     // Disconnect and complete shutdown
     // TODO: FOR *1, maybe make a peer-based stopConnection
@@ -40,8 +36,6 @@ public:
     
     // Status
     bool isConnected() const;
-    bool isRunning() const;
-    void setRunning();
     
     // Connection monitoring
     void monitorLoop();
@@ -54,29 +48,16 @@ private:
 
     // Network discovery
     bool discoverPublicAddress();
-    
-    // Handler methods
-    void handleConnectionInit(const std::string&, const std::string&, int);
-    void handleNetworkData(std::vector<uint8_t>);
-    void handlePacketFromTun(const std::vector<uint8_t>&);
-    
-    // IP helpers
-    void assignIPAddresses();
-    
-    // Packet analysis and forwarding
-    bool forwardPacketToPeer(const std::vector<uint8_t>&);
-    bool deliverPacketToTun(std::vector<uint8_t>);
 
-    // Virtual network configuration
-    static constexpr const char* VIRTUAL_NETWORK = "10.0.0.0";
-    static constexpr const char* VIRTUAL_NETMASK = "255.255.255.0";
-    static constexpr const char* HOST_IP = "10.0.0.1";
-    static constexpr const char* CLIENT_IP = "10.0.0.2";
+    // Initialize connection
+    void initializeConnectionData(
+        const std::pair<int, std::map<uint32_t, std::pair<std::uint32_t, int>>>&);
 
     // Data
-    std::string pendingRequestFrom;
+    NetworkConfigManager::ConnectionConfig currentConnectionConfig;
+
+    // TO REMOVE
     std::atomic<bool> running;
-    std::atomic<bool> isHost;
     
     std::string localVirtualIp;
     // TODO: REFACTORIZE FOR *1, KEEP virtual_ip -> public_ip map

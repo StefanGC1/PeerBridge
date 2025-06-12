@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SystemStateManager.hpp"
+#include "NetworkConfigManager.hpp"
 #include <grpcpp/grpcpp.h>
 #include "peerbridge.grpc.pb.h"
 #include <functional>
@@ -13,7 +15,9 @@ public:
     using StartConnectionCallback = std::function<bool(const std::vector<std::string>&, int)>;
     using StopConnectionCallback = std::function<bool()>;
 
-    IPCServer();
+    IPCServer(
+        std::shared_ptr<SystemStateManager>,
+        NetworkConfigManager&);
     ~IPCServer();
 
     void RunServer(const std::string&);
@@ -49,8 +53,17 @@ public:
         const peerbridge::StopConnectionRequest* ,
         peerbridge::StopConnectionResponse*) override;
 
+    // RPC method implementation for GetConnectionStatus
+    grpc::Status GetConnectionStatus(
+        grpc::ServerContext*,
+        const peerbridge::GetConnectionStatusRequest*,
+        peerbridge::GetConnectionStatusResponse*) override;
+
 private:
     std::unique_ptr<grpc::Server> server;
+
+    std::shared_ptr<SystemStateManager> stateManager;
+    NetworkConfigManager& networkConfigManager;
     
     // Callbacks
     GetStunInfoCallback getStunInfoCallback;

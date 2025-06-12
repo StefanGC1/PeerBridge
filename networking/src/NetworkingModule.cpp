@@ -1,5 +1,6 @@
 #include "NetworkingModule.hpp"
 #include "Logger.hpp"
+#include "Utils.hpp"
 #include <iostream>
 #include <chrono>
 #include <random>
@@ -9,13 +10,15 @@
 UDPNetwork::UDPNetwork(
     std::unique_ptr<boost::asio::ip::udp::socket> socket,
     boost::asio::io_context& context,
-    std::shared_ptr<SystemStateManager> state_manager) 
+    std::shared_ptr<SystemStateManager> state_manager,
+    NetworkConfigManager& networkConfigManager) 
     : running(false)
     , localPort(0)
     , nextSeqNumber(0)
     , socket(std::move(socket))
     , ioContext(context)
     , stateManager(state_manager)
+    , networkConfigManager(networkConfigManager)
     , keepAliveTimer(ioContext)
 {
 }
@@ -86,50 +89,52 @@ bool UDPNetwork::startListening(int port)
     }
 }
 
-bool UDPNetwork::connectToPeer(const std::string& ip, int port)
+bool UDPNetwork::startConnection(uint32_t selfIp, std::map<uint32_t, std::pair<std::uint32_t, int>> virtualIpToPublicIpAndPort)
 {
-    if (peerConnection.isConnected())
+    for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
     {
-        std::cout << "[Network] Already connected to a peer." << std::endl;
-        return false;
+        if (connectionInfo.isConnected())
+        {
+            SYSTEM_LOG_ERROR("[Network] Already connected to a peer: {}", publicIp);
+            return false;
+        }
     }
-    
-    try
-    {
-        boost::asio::ip::address addr = boost::asio::ip::make_address(ip);
-        peerEndpoint = boost::asio::ip::udp::endpoint(addr, port);
-        currentPeerEndpoint = ip + ":" + std::to_string(port);
 
-        NETWORK_LOG_INFO("[Network] Starting UDP hole punching to {}:{}", ip, port);
-        running = true;
-        
-        // Update system state
-        stateManager->setState(SystemState::CONNECTING);
-        
-        // Start the hole punching process
-        startHolePunchingProcess(peerEndpoint);
-        
-        return true;
-    } catch (const std::exception& e)
+    selfVirtualIp = selfIp;
+    virtualIpToPublicIp = virtualIpToPublicIpAndPort;
+    for (const auto& [virtualIp, publicIpAndPort] : virtualIpToPublicIp)
     {
-        NETWORK_LOG_ERROR("[Network] Connect error: {}", e.what());
-        return false;
-    }
-}
+        uint32_t publicIp = publicIpAndPort.first;
+        int port = publicIpAndPort.second;
 
-void UDPNetwork::startHolePunchingProcess(const boost::asio::ip::udp::endpoint& peer_endpoint)
-{
-    // Send initial hole punching packets
-    for (int i = 0; i < 5; i++) {
-        sendHolePunchPacket();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        boost::asio::ip::address addr = boost::asio::ip::make_address(utils::uint32ToIp(publicIp));
+        boost::asio::ip::udp::endpoint peerEndpoint(addr, port);
+        publicIpToPeerConnection[publicIp] = PeerConnectionInfo(peerEndpoint);
     }
+
+    // Start hole punching process
+    startHolePunchingProcess();
 
     // Start keep-alive timer
     startKeepAliveTimer();
+
+    return true;
 }
 
-void UDPNetwork::sendHolePunchPacket()
+void UDPNetwork::startHolePunchingProcess()
+{
+    // Send initial hole punching packets
+    for (int i = 0; i < 5; i++)
+    {
+        for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
+        {
+            sendHolePunchPacket(connectionInfo.getPeerEndpoint());
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
+void UDPNetwork::sendHolePunchPacket(const boost::asio::ip::udp::endpoint& peerEndpoint)
 {
     try
     {
@@ -141,7 +146,6 @@ void UDPNetwork::sendHolePunchPacket()
         attachCustomHeader(packet, PacketType::HOLE_PUNCH);
         
         // Send packet asynchronously
-        // TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
         socket->async_send_to(
             boost::asio::buffer(*packet), peerEndpoint,
             [packet](const boost::system::error_code& error, std::size_t bytesSent)
@@ -163,144 +167,132 @@ void UDPNetwork::sendHolePunchPacket()
 
 void UDPNetwork::checkAllConnections()
 {
-    if (peerConnection.hasTimedOut(20))
+    if (publicIpToPeerConnection.empty() || virtualIpToPublicIp.empty())
     {
-        // Time out peer after 20 seconds of inactivity
-        auto last_activity = peerConnection.getLastActivity();
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count();
-        
-        SYSTEM_LOG_ERROR("[Network] Connection timeout. No packets received for {} seconds (threshold: 20s).", elapsed);
-        NETWORK_LOG_ERROR("[Network] Connection timeout. No packets received for {} seconds (threshold: 20s).", elapsed);
-        
-        // Mark as disconnected
-        peerConnection.setConnected(false);
-        
-        // Notify ALL_PEERS_DISCONNECTED for single peer setup
-        notifyConnectionEvent(NetworkEvent::ALL_PEERS_DISCONNECTED);
-        
-        // TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-        // if (!hasActiveConnections()) {
-        //     notifyConnectionEvent(NetworkEvent::ALL_PEERS_DISCONNECTED);
-        // }
+        SYSTEM_LOG_WARNING("[Network] No more connections active, closing connection...");
+        NETWORK_LOG_WARNING("[Network] No more connections active, closing connection...");
+        stateManager->queueEvent(NetworkEventData(NetworkEvent::ALL_PEERS_DISCONNECTED));
+        return;
     }
-}
 
-void UDPNetwork::notifyConnectionEvent(NetworkEvent event, const std::string& endpoint)
-{
-    SYSTEM_LOG_INFO("[Network] Queuing network event: {}", static_cast<int>(event));
-    if (endpoint.empty())
+    for (auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
     {
-        stateManager->queueEvent(NetworkEventData(event));
-    }
-    else
-    {
-        stateManager->queueEvent(NetworkEventData(event, endpoint));
-    }
-}
-
-// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-void UDPNetwork::stopConnection()
-{
-    // Send disconnect notification to peer
-    sendDisconnectNotification();
-
-    peerConnection.setConnected(false);
-    running = false;
-
-    stopKeepAliveTimer();
-    
-    stateManager->setState(SystemState::IDLE);
-    
-    SYSTEM_LOG_INFO("[Network] Stopped connection to peer");
-    NETWORK_LOG_INFO("[Network] Stopped connection to peer");
-}
-
-void UDPNetwork::shutdown()
-{
-    // Stop any active connection
-    // TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-    if (peerConnection.isConnected()) {
-        stopConnection();
-    }
-    
-    // Then shut down the network stack
-    running = false;
-    peerConnection.setConnected(false);
-    stateManager->setState(SystemState::SHUTTING_DOWN);
-
-    stopKeepAliveTimer();
-
-    if (socket)
-    {
-        boost::system::error_code ec;
-        socket->cancel(ec);
-        socket->close(ec);
-    }
-    
-    // Stop io_context 
-    ioContext.stop();
-
-    if (ioThread.joinable())
-        ioThread.join();
-    
-    SYSTEM_LOG_INFO("[Network] Network subsystem shut down");
-}
-
-// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-void UDPNetwork::sendDisconnectNotification()
-{
-    try
-    {
-        if (!peerConnection.isConnected() || !socket)
+        if (!connectionInfo.isConnected())
         {
-            return; // No connection to notify
+            continue;
         }
 
-        SYSTEM_LOG_INFO("[Network] Sending disconnect notification to peer");
-        NETWORK_LOG_INFO("[Network] Sending disconnect notification to peer");
-        
-        // Create disconnect packet
-        auto packet = std::make_shared<std::vector<uint8_t>>(16);
-        
-        // Attach custom header
-        attachCustomHeader(packet, PacketType::DISCONNECT);
-        
-        // Send packet - try multiple times to increase chance of delivery
-        for (int i = 0; i < 3; i++)
+        if (connectionInfo.hasTimedOut(20))
         {
-            socket->async_send_to(
-                boost::asio::buffer(*packet), peerEndpoint,
-                [packet](const boost::system::error_code& error, std::size_t bytesSent)
+            // Time out peer after 20 seconds of inactivity
+            auto last_activity = connectionInfo.getLastActivity();
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count();
+            
+            SYSTEM_LOG_ERROR("[Network] Connection timeout. No packets received for {} seconds (threshold: 20s).", elapsed);
+            NETWORK_LOG_ERROR("[Network] Connection timeout. No packets received for {} seconds (threshold: 20s).", elapsed);
+            
+           // Mark as disconnected
+            connectionInfo.setConnected(false);
+
+            // Remove the peer after a couple of seconds
+            boost::asio::steady_timer timer(ioContext);
+            timer.expires_after(std::chrono::seconds(2));
+            timer.async_wait([this, publicIp](const boost::system::error_code& error)
+            {
+                if (error != boost::asio::error::operation_aborted)
                 {
-                    // Ignore errors since we're disconnecting
-                });
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    auto it = publicIpToPeerConnection.find(publicIp);
+                    if (it != publicIpToPeerConnection.end() &&
+                        it->second.isConnected())
+                    {
+                        NETWORK_LOG_ERROR("[Network] Peer miraculously reconnected after timeout");
+                        return;
+                    }
+                    
+                    // Remove the peer
+                    uint32_t ipToRemove = 0;
+                    for (const auto& [virtualIp, publicIpAndPort] : virtualIpToPublicIp)
+                    {
+                        if (publicIpAndPort.first == publicIp)
+                        {
+                            ipToRemove = virtualIp;
+                            break;
+                        }
+                    }
+
+                    if (ipToRemove == selfVirtualIp)
+                    {
+                        NETWORK_LOG_ERROR("[Network] How did we get here? Cannot remove self from peer list");
+                        return;
+                    }
+
+                    if (ipToRemove != 0)
+                    {
+                        publicIpToPeerConnection.erase(publicIp);
+                        virtualIpToPublicIp.erase(ipToRemove);
+                    }
+                }
+            });
         }
     }
-    catch (const std::exception& e)
-    {
-        SYSTEM_LOG_ERROR("[Network] Error sending disconnect notification: {}", e.what());
-        NETWORK_LOG_ERROR("[Network] Error sending disconnect notification: {}", e.what());
-    }
 }
 
-// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-bool UDPNetwork::isConnected() const
-{
-    return peerConnection.isConnected();
-}
-
-// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-bool UDPNetwork::sendMessage(const std::vector<uint8_t>& dataToSend)
+void UDPNetwork::processPacketFromTun(const std::vector<uint8_t>& packet)
 {
     if (!running || !socket)
     {
-        SYSTEM_LOG_ERROR("[Network] Cannot send message: socket not available or system not running (disconnected)");
-        NETWORK_LOG_ERROR("[Network] Cannot send message: socket not available or system not running (disconnected)");
-        return false;
+        NETWORK_LOG_ERROR("[Network] Cannot process packet from tun: socket not available or system not running (disconnected)");
+        return;
     }
-    
+
+    // Extract source and destination IPs for filtering
+    uint32_t srcIp = (packet[12] << 24) | (packet[13] << 16) | (packet[14] << 8) | packet[15];
+    uint32_t dstIp = (packet[16] << 24) | (packet[17] << 16) | (packet[18] << 8) | packet[19];
+
+    // Forward packets that are meant for peer OR are broadcast/multicast packets
+    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager.getSetupConfig().IP_SPACE + std::to_string(255));
+
+    const auto& virtualIpMapIter = virtualIpToPublicIp.find(dstIp);
+    bool isForPeer = (virtualIpMapIter != virtualIpToPublicIp.end());
+    bool isBroadcast = (dstIp == BROADCAST_IP) || (dstIp == NetworkConstants::BROADCAST_IP2);
+    bool isMulticast = (dstIp >> 28) == 14; // 224.0.0.0/4 (first octet 224-239)
+
+    if (!isForPeer && !isBroadcast && !isMulticast)
+    {
+        // Drop packet not meant for peer
+        return;
+    }
+
+    // We know this exists in the map cause we checked it above
+    if (isForPeer)
+    {
+        uint32_t peerPublicIp = virtualIpMapIter->second.first;
+        if (publicIpToPeerConnection.find(peerPublicIp) == publicIpToPeerConnection.end())
+        {
+            NETWORK_LOG_ERROR(
+                "[Network] Critical error: Peer entry found in virtualIpToPublicIp but not found in connectionInfo map: {}", peerPublicIp);
+            return;
+        }
+        auto& peerConnection = publicIpToPeerConnection[peerPublicIp];
+        boost::asio::ip::udp::endpoint peerEndpoint = peerConnection.getPeerEndpoint();
+        // Send the packet to the peer
+        sendMessage(packet, peerEndpoint);
+    }
+    else if (isBroadcast || isMulticast)
+    {
+        for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
+        {
+            sendMessage(packet, connectionInfo.getPeerEndpoint());
+        }
+    }
+}
+
+// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
+bool UDPNetwork::sendMessage(
+    const std::vector<uint8_t>& dataToSend,
+    const boost::asio::ip::udp::endpoint& peerEndpoint)
+{ 
     try
     {
         // Calculate total packet size: header (16 bytes) + message
@@ -310,10 +302,6 @@ bool UDPNetwork::sendMessage(const std::vector<uint8_t>& dataToSend)
             NETWORK_LOG_ERROR("[Network] Message too large, max size is {}", (MAX_PACKET_SIZE - 16));
             return false;
         }
-        
-        /*
-        * SMALL CUSTOM PROTOCOL HEADER
-        */
 
         // Create packet with shared ownership for async operation
         auto packet = std::make_shared<std::vector<uint8_t>>(packetSize);
@@ -340,9 +328,9 @@ bool UDPNetwork::sendMessage(const std::vector<uint8_t>& dataToSend)
         // Send packet asynchronously
         socket->async_send_to(
             boost::asio::buffer(*packet), peerEndpoint,
-            [this, packet, seq](const boost::system::error_code& error, std::size_t bytesSent)
+            [this, packet, seq, peerEndpoint](const boost::system::error_code& error, std::size_t bytesSent)
             {
-                this->handleSendComplete(error, bytesSent, seq);
+                this->handleSendComplete(error, bytesSent, seq, peerEndpoint);
             });
         
         return true;
@@ -358,7 +346,8 @@ bool UDPNetwork::sendMessage(const std::vector<uint8_t>& dataToSend)
 void UDPNetwork::handleSendComplete(
     const boost::system::error_code& error,
     std::size_t bytesSent,
-    uint32_t seq)
+    uint32_t seq,
+    const boost::asio::ip::udp::endpoint& peerEndpoint)
 {
     if (error)
     {
@@ -387,17 +376,9 @@ void UDPNetwork::handleSendComplete(
             // Disconnect on fatal errors, not temporary ones
             if (error != boost::asio::error::operation_aborted)
             {
-                boost::asio::post(ioContext, [this]() {this->handleDisconnect(); });
+                boost::asio::post(ioContext, [this, peerEndpoint]() {this->handleDisconnect(peerEndpoint); });
             }
         }
-    }
-}
-
-void UDPNetwork::processMessage(std::vector<uint8_t> message, const boost::asio::ip::udp::endpoint& sender)
-{
-    if (onMessageCallback)
-    {
-        onMessageCallback(std::move(message));
     }
 }
 
@@ -472,7 +453,7 @@ void UDPNetwork::handleReceiveFrom(
         {
             // Fatal errors
             NETWORK_LOG_ERROR("[Network] Fatal receive error: {} (code: {}), disconnecting", error.message(), error.value());
-            handleDisconnect();
+            handleDisconnect(*senderEndpoint);
         }
     }
 }
@@ -516,31 +497,40 @@ void UDPNetwork::processReceivedData(
     
     // Get sequence number
     uint32_t seq = (buffer[8] << 24) | (buffer[9] << 16) | (buffer[10] << 8) | buffer[11];
+
+    uint32_t senderIp = utils::ipToUint32(senderEndpoint->address().to_string());
+    if (publicIpToPeerConnection.find(senderIp) == publicIpToPeerConnection.end())
+    {
+        NETWORK_LOG_ERROR("[Network] Received packet from unknown peer: {}", senderEndpoint->address().to_string());
+        return;
+    }
     
     // Update peer activity time
+    auto& peerConnection = publicIpToPeerConnection[senderIp];
     peerConnection.updateActivity();
 
-    // This could probablt be structured better, lol
-    if (packetType != PacketType::DISCONNECT)
+    if (packetType == PacketType::DISCONNECT)
     {
-        // Consume packet if network not running
-        if (!running)
-        {
-            NETWORK_LOG_ERROR("[Network] Received packet, but network not running");
-            return;
-        }
+        SYSTEM_LOG_INFO("[Network] Received disconnect notification from peer");
+        NETWORK_LOG_INFO("[Network] Received disconnect notification from peer");
+        handleDisconnect(*senderEndpoint);
+    }
 
-        // Store peer endpoint if not already connected
-        if (!peerConnection.isConnected())
-        {
-            NETWORK_LOG_INFO("[Network] First valid packet received from peer, establishing connection");
-            peerEndpoint = *senderEndpoint;
-            currentPeerEndpoint = senderEndpoint->address().to_string() + ":" + std::to_string(senderEndpoint->port());
-            peerConnection.setConnected(true);
-            
-            // Notify peer connected event
-            notifyConnectionEvent(NetworkEvent::PEER_CONNECTED, currentPeerEndpoint);
-        }
+    // Consume packet if network not running
+    if (!running)
+    {
+        NETWORK_LOG_ERROR("[Network] Received packet, but network not running");
+        return;
+    }
+
+    // Store peer endpoint if not already connected
+    if (!peerConnection.isConnected())
+    {
+        NETWORK_LOG_INFO("[Network] First valid packet received from peer, establishing connection");
+        peerConnection.setConnected(true);
+        
+        // Notify peer connected event
+        notifyConnectionEvent(NetworkEvent::PEER_CONNECTED, peerConnection.getPeerEndpoint().address().to_string());
     }
 
     // Process packet based on type
@@ -554,13 +544,6 @@ void UDPNetwork::processReceivedData(
         case PacketType::HEARTBEAT:
             NETWORK_LOG_INFO("[Network] Received heartbeat packet from peer");
             // Activity time was already updated above
-            break;
-            
-        case PacketType::DISCONNECT:
-            // Peer wants to disconnect
-            SYSTEM_LOG_INFO("[Network] Received disconnect notification from peer");
-            NETWORK_LOG_INFO("[Network] Received disconnect notification from peer");
-            handleDisconnect();
             break;
             
         case PacketType::MESSAGE:
@@ -597,9 +580,7 @@ void UDPNetwork::processReceivedData(
             std::memcpy(tunPacket.data(), buffer.data() + 16, msgLen);
             
             // Process message, send to wintun interface
-            auto sender_copy = *senderEndpoint;
-            // Revert to boost::asio::post in case the following breaks the program
-            this->processMessage(std::move(tunPacket), sender_copy);
+            deliverPacketToTun(std::move(tunPacket));
             break;
         }
         case PacketType::ACK:
@@ -615,22 +596,168 @@ void UDPNetwork::processReceivedData(
     }
 }
 
-// TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
-void UDPNetwork::handleDisconnect()
+void UDPNetwork::deliverPacketToTun(const std::vector<uint8_t> packet)
 {
-    if (!peerConnection.isConnected()) return;
+    // Extract source and destination IPs for filtering
+    uint32_t srcIp = (packet[12] << 24) | (packet[13] << 16) | (packet[14] << 8) | packet[15];
+    uint32_t dstIp = (packet[16] << 24) | (packet[17] << 16) | (packet[18] << 8) | packet[19];
+
+    // Only deliver packets that are meant for us OR are broadcast/multicast packets
+    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager.getSetupConfig().IP_SPACE + std::to_string(255));
+
+    bool isForUs = (dstIp == selfVirtualIp);
+    bool isBroadcast = (dstIp == BROADCAST_IP) || (dstIp == NetworkConstants::BROADCAST_IP2);
+    bool isMulticast = (dstIp >> 28) == 14; // 224.0.0.0/4 (first octet 224-239)
+
+    if (!isForUs && !isBroadcast && !isMulticast)
+    {
+        // Drop packet not meant for us
+        return;
+    }
+
+    // Send the packet to the TUN interface
+    onMessageCallback(std::move(packet));
+}
+
+bool UDPNetwork::isConnected() const
+{
+    return running;
+}
+
+void UDPNetwork::notifyConnectionEvent(NetworkEvent event, const std::string& endpoint)
+{
+    SYSTEM_LOG_INFO("[Network] Queuing network event: {}", static_cast<int>(event));
+    if (endpoint.empty())
+    {
+        stateManager->queueEvent(NetworkEventData(event));
+    }
+    else
+    {
+        stateManager->queueEvent(NetworkEventData(event, endpoint));
+    }
+}
+
+void UDPNetwork::handleDisconnect(
+    boost::asio::ip::udp::endpoint peerEndpoint,
+    bool isCausedByError)
+{
+    uint32_t ipToRemove = utils::ipToUint32(peerEndpoint.address().to_string());
+    if (ipToRemove == selfVirtualIp)
+    {
+        NETWORK_LOG_ERROR("[Network] How did we get here? Cannot remove self from peer list");
+        return;
+    }
+
+    if (isCausedByError)
+    {
+        NETWORK_LOG_ERROR("[Network] Peer disconnected due to error: {}", peerEndpoint.address().to_string());
+        sendDisconnectNotification(peerEndpoint);
+    }
+
+    virtualIpToPublicIp.erase(ipToRemove);
+    publicIpToPeerConnection.erase(ipToRemove);
+    notifyConnectionEvent(NetworkEvent::PEER_DISCONNECTED, peerEndpoint.address().to_string());
+}
+
+void UDPNetwork::sendDisconnectNotification(const boost::asio::ip::udp::endpoint& peerEndpoint)
+{
+    try
+    {
+        if (!peerConnection.isConnected() || !socket)
+        {
+            return; // No connection to notify
+        }
+
+        SYSTEM_LOG_INFO("[Network] Sending disconnect notification to peer");
+        NETWORK_LOG_INFO("[Network] Sending disconnect notification to peer");
+        
+        // Create disconnect packet
+        auto packet = std::make_shared<std::vector<uint8_t>>(16);
+        
+        // Attach custom header
+        attachCustomHeader(packet, PacketType::DISCONNECT);
+        
+        // Send packet - try multiple times to increase chance of delivery
+        for (int i = 0; i < 3; i++)
+        {
+            socket->async_send_to(
+                boost::asio::buffer(*packet), peerEndpoint,
+                [packet](const boost::system::error_code& error, std::size_t bytesSent)
+                {
+                    // Ignore errors since we're disconnecting
+                });
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        SYSTEM_LOG_ERROR("[Network] Error sending disconnect notification: {}", e.what());
+        NETWORK_LOG_ERROR("[Network] Error sending disconnect notification: {}", e.what());
+    }
+}
+
+void UDPNetwork::stopConnection()
+{
+    for (auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
+    {
+        if (connectionInfo.isConnected())
+        {
+            NETWORK_LOG_INFO("[Network] Sending disconnect notification to peer: {}",
+                connectionInfo.getPeerEndpoint().address().to_string());
+            sendDisconnectNotification(connectionInfo.getPeerEndpoint());
+            connectionInfo.setConnected(false);
+        }
+    }
+
+    virtualIpToPublicIp.clear();
+    publicIpToPeerConnection.clear();
+
+    running = false;
+
+    stopKeepAliveTimer();
     
+    stateManager->setState(SystemState::IDLE);
+    
+    SYSTEM_LOG_INFO("[Network] Stopped connection to peer");
+    NETWORK_LOG_INFO("[Network] Stopped connection to peer");
+}
+
+void UDPNetwork::shutdown()
+{
+    // Stop any active connection
+    if (!publicIpToPeerConnection.empty() && !virtualIpToPublicIp.empty())
+    {
+        stopConnection();
+    }
+    
+    // Then shut down the network stack
+    running = false;
     peerConnection.setConnected(false);
+    stateManager->setState(SystemState::SHUTTING_DOWN);
+
+    stopKeepAliveTimer();
+
+    if (socket)
+    {
+        boost::system::error_code ec;
+        socket->cancel(ec);
+        socket->close(ec);
+    }
     
-    // Notify ALL_PEERS_DISCONNECTED for single peer setup
-    notifyConnectionEvent(NetworkEvent::ALL_PEERS_DISCONNECTED);
+    // Stop io_context 
+    ioContext.stop();
+
+    if (ioThread.joinable())
+        ioThread.join();
+    
+    SYSTEM_LOG_INFO("[Network] Network subsystem shut down");
 }
 
 void UDPNetwork::startKeepAliveTimer()
 {
     if (!running) return;
 
-    keepAliveTimer.expires_after(std::chrono::seconds(3));
+    keepAliveTimer.expires_after(std::chrono::seconds(4));
     keepAliveTimer.async_wait([this](const boost::system::error_code& error)
     {
         handleKeepAlive(error);
@@ -666,11 +793,12 @@ void UDPNetwork::handleKeepAlive(const boost::system::error_code& error)
 
     // TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
     NETWORK_LOG_INFO("[Network] Running keep-alive functionality");
-    sendHolePunchPacket(); // Send hole punch packet
-    if (peerConnection.isConnected())
+    for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
     {
-        checkAllConnections(); // Check connection status
+        sendHolePunchPacket(connectionInfo.getPeerEndpoint());
     }
+
+    checkAllConnections();
 
     startKeepAliveTimer(); // Restart timer
 }
@@ -680,6 +808,10 @@ uint32_t UDPNetwork::attachCustomHeader(
     PacketType packetType,
     std::optional<uint32_t> seqOpt)
 {
+    /*
+    * SMALL CUSTOM PROTOCOL HEADER
+    */
+
     // Set magic number
     (*packet)[0] = (MAGIC_NUMBER >> 24) & 0xFF;
     (*packet)[1] = (MAGIC_NUMBER >> 16) & 0xFF;
@@ -701,4 +833,9 @@ uint32_t UDPNetwork::attachCustomHeader(
     (*packet)[11] = seq & 0xFF;
 
     return seq;
+}
+
+boost::asio::io_context& UDPNetwork::getIOContext()
+{
+    return ioContext;
 }

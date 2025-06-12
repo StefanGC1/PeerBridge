@@ -25,7 +25,7 @@ bool NetworkConfigManager::configureInterface(const ConnectionConfig& connection
     if (!routeConfigSuccess)
     {
         SYSTEM_LOG_ERROR("[Network Config Manager] Interface configuration failed, removing any routes that succeded");
-        removeRouting(connectionConfig.peerVirtualIp);
+        removeRouting(connectionConfig.peerVirtualIps);
         return false;
     }
     setupFirewall();
@@ -38,7 +38,7 @@ bool NetworkConfigManager::setupRouting(const ConnectionConfig& connectionConfig
     // TODO: Will have check for peerInfo in IPCServer on data, maybe add check here as well later.
     
     std::string networkAddr = setupConfig.IP_SPACE + std::to_string(NetworkConstants::BASE_IP_INDEX);
-    std::string selfVirtualIp = setupConfig.IP_SPACE + std::to_string(connectionConfig.selfIndex);
+    std::string selfVirtualIp = connectionConfig.selfVirtualIp;
     std::string netmask = NetworkConstants::NET_MASK;
 
     // Count mask bits for CIDR notation
@@ -80,17 +80,25 @@ bool NetworkConfigManager::setupRouting(const ConnectionConfig& connectionConfig
         
         // TODO: REFACTORIZE FOR *1 FOR MULTIPLE PEERS
         // Get peer IP
-        std::string peerIP = connectionConfig.peerVirtualIp;
-        
-        command << "netsh interface ipv4 add route " 
+        bool successAll = true;
+
+        for (const auto& peerIP : connectionConfig.peerVirtualIps)
+        {
+            command.str("");
+            command << "netsh interface ipv4 add route " 
                 << peerIP << "/32"
                 << " \"" << narrowAlias << "\""
                 << " metric=1";
-        success = executeNetshCommand(command.str());
+            if (!executeNetshCommand(command.str()))
+            {
+                SYSTEM_LOG_WARNING("[Network Config Manager] Failed to add route for peer: {}", peerIP);
+                successAll = false;
+            }
+        }
 
-        if (!success)
+        if (!successAll)
         {
-            SYSTEM_LOG_WARNING("[Network Config Manager] Failed to add route for virtual network, connection may be limited");
+            SYSTEM_LOG_WARNING("[Network Config Manager] Failed to peer specific routes for virtual network, connection may be limited");
             routeApproach = RouteConfigApproach::FAILED;
         }
     }
@@ -209,9 +217,9 @@ void NetworkConfigManager::setupFirewall()
 }
 
 // TODO: Consider using ConnectionConfig
-void NetworkConfigManager::resetInterfaceConfiguration(const std::string& peerVirtualIp)
+void NetworkConfigManager::resetInterfaceConfiguration(const std::vector<std::string>& peerVirtualIps)
 {
-    bool success = removeRouting(peerVirtualIp);
+    bool success = removeRouting(peerVirtualIps);
     if (!success)
         SYSTEM_LOG_INFO("[Network Config Manager] Failed to remove routing");
     removeFirewall();
@@ -219,7 +227,7 @@ void NetworkConfigManager::resetInterfaceConfiguration(const std::string& peerVi
 }
 
 // TODO: Consider using ConnectionConfig
-bool NetworkConfigManager::removeRouting(const std::string& peerVirtualIp)
+bool NetworkConfigManager::removeRouting(const std::vector<std::string>& peerVirtualIps)
 {
     std::string networkAddr = setupConfig.IP_SPACE + std::to_string(NetworkConstants::BASE_IP_INDEX);
     std::string netmask = NetworkConstants::NET_MASK;
@@ -254,11 +262,14 @@ bool NetworkConfigManager::removeRouting(const std::string& peerVirtualIp)
         case RouteConfigApproach::FALLBACK_ROUTE_ALL:
         {
             // TODO: TO BE MODIFIED FOR *1
-            command << "netsh interface ipv4 delete route " 
-                << peerVirtualIp << "/32"
-                << " \"" << narrowAlias << "\"";
-            if (!(success = executeNetshCommand(command.str())))
-                SYSTEM_LOG_INFO("[Network Config Manager] Failed to remove per-peer specific routes");
+            for (const auto& peerIP : peerVirtualIps)
+            {
+                command << "netsh interface ipv4 delete route " 
+                    << peerIP << "/32"
+                    << " \"" << narrowAlias << "\"";
+                if (!(success = executeNetshCommand(command.str())))
+                    SYSTEM_LOG_INFO("[Network Config Manager] Failed to remove per-peer specific routes");
+            }
             break;
         }
         case RouteConfigApproach::FAILED:
@@ -389,4 +400,9 @@ bool NetworkConfigManager::executeNetshCommand(const std::string& command) {
 void NetworkConfigManager::setNarrowAlias(const std::string& nAlias)
 {
     narrowAlias = nAlias;
+}
+
+NetworkConfigManager::SetupConfig NetworkConfigManager::getSetupConfig()
+{
+    return setupConfig;
 }
