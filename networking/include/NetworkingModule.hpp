@@ -43,7 +43,8 @@ public:
     void processPacketFromTun(const std::vector<uint8_t>&);
     bool sendMessage(
         const std::vector<uint8_t>& data,
-        const boost::asio::ip::udp::endpoint& peerEndpoint);
+        const boost::asio::ip::udp::endpoint& peerEndpoint,
+        const std::array<uint8_t, crypto_box_BEFORENMBYTES>& sharedKey);
     void setMessageCallback(MessageCallback callback);
     
     // Get local information

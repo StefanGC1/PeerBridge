@@ -307,13 +307,19 @@ void UDPNetwork::processPacketFromTun(const std::vector<uint8_t>& packet)
         auto& peerConnection = publicIpToPeerConnection[peerPublicIp];
         boost::asio::ip::udp::endpoint peerEndpoint = peerConnection.getPeerEndpoint();
         // Send the packet to the peer
-        sendMessage(packet, peerEndpoint);
+        sendMessage(
+            packet,
+            peerEndpoint,
+            peerConnection.getSharedKey());
     }
     else if (isBroadcast || isMulticast)
     {
         for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
         {
-            sendMessage(packet, connectionInfo.getPeerEndpoint());
+            sendMessage(
+                packet,
+                connectionInfo.getPeerEndpoint(),
+                connectionInfo.getSharedKey());
         }
     }
 }
@@ -321,42 +327,72 @@ void UDPNetwork::processPacketFromTun(const std::vector<uint8_t>& packet)
 // TODO: REFACTOR FOR *1, FOR MULTIPLE PEERS
 bool UDPNetwork::sendMessage(
     const std::vector<uint8_t>& dataToSend,
-    const boost::asio::ip::udp::endpoint& peerEndpoint)
+    const boost::asio::ip::udp::endpoint& peerEndpoint,
+    const std::array<uint8_t, crypto_box_BEFORENMBYTES>& sharedKey)
 { 
     try
     {
-        // Calculate total packet size: header (16 bytes) + message
         constexpr size_t CUSTOM_HEADER_SIZE = 16;
         constexpr size_t NONCE_LENGTH = crypto_box_NONCEBYTES;
         constexpr size_t MAC_LENGTH = crypto_box_MACBYTES;
-        size_t packetSize = 16 + dataToSend.size();
-        if (packetSize > MAX_PACKET_SIZE)
+        
+        // Calculate total packet size: header (16 bytes) + nonce (24 bytes) + mac (16 bytes) + message
+        size_t winTunPacketSize = dataToSend.size();
+        size_t wholePacketSize = CUSTOM_HEADER_SIZE + NONCE_LENGTH + MAC_LENGTH + winTunPacketSize;
+
+        if (wholePacketSize > MAX_PACKET_SIZE)
         {
-            NETWORK_LOG_ERROR("[Network] Message too large, max size is {}", (MAX_PACKET_SIZE - 16));
+            NETWORK_LOG_ERROR("[Network] Message too large, max size is {}",
+                (MAX_PACKET_SIZE - CUSTOM_HEADER_SIZE - NONCE_LENGTH - MAC_LENGTH));
             return false;
         }
 
+        // size_t packetSize = 16 + dataToSend.size();
+        // if (packetSize > MAX_PACKET_SIZE)
+        // {
+        //     NETWORK_LOG_ERROR("[Network] Message too large, max size is {}", (MAX_PACKET_SIZE - 16));
+        //     return false;
+        // }
+
         // Create packet with shared ownership for async operation
-        auto packet = std::make_shared<std::vector<uint8_t>>(packetSize);
+        auto packet = std::make_shared<std::vector<uint8_t>>(wholePacketSize);
 
         // Attach custom header
         uint32_t seq = attachCustomHeader(packet, PacketType::MESSAGE);
         
-        // Set message length
-        uint32_t msg_len = static_cast<uint32_t>(dataToSend.size());
-        (*packet)[12] = (msg_len >> 24) & 0xFF;
-        (*packet)[13] = (msg_len >> 16) & 0xFF;
-        (*packet)[14] = (msg_len >> 8) & 0xFF;
-        (*packet)[15] = msg_len & 0xFF;
-        
-        // Copy message content
-        std::memcpy(packet->data() + 16, dataToSend.data(), dataToSend.size());
-        
+        // Set wintun packet length
+        (*packet)[12] = (winTunPacketSize >> 24) & 0xFF;
+        (*packet)[13] = (winTunPacketSize >> 16) & 0xFF;
+        (*packet)[14] = (winTunPacketSize >> 8) & 0xFF;
+        (*packet)[15] = winTunPacketSize & 0xFF;
+
+        // Packet pointer position helpers for encryption
+        uint8_t* basePos = packet->data();
+        uint8_t* noncePos = basePos + CUSTOM_HEADER_SIZE;
+        uint8_t* macPos = noncePos + NONCE_LENGTH;
+        uint8_t* encrPos = macPos + MAC_LENGTH;
+
+        // std::memcpy(packet->data() + 16, dataToSend.data(), dataToSend.size());
+        std::memcpy(encrPos, dataToSend.data(), winTunPacketSize);
+
+        // Encrypt
+        randombytes_buf(noncePos, NONCE_LENGTH);
+        crypto_box_easy_afternm(
+            macPos, // dest
+            encrPos, // source
+            winTunPacketSize, // message len
+            noncePos, // nonce
+            sharedKey.data()); // shared key
+
         // Track for acknowledgment
         {
             std::lock_guard<std::mutex> ack_lock(pendingAcksMutex);
             pendingAcks[seq] = std::chrono::steady_clock::now();
         }
+
+        /*
+        * PACKET STRUCTURE: CUSTOM HEADER (16 bytes) + NONCE (24 bytes) then (MAC (16 bytes) + MESSAGE)
+        */
         
         // Send packet asynchronously
         socket->async_send_to(
@@ -496,8 +532,12 @@ void UDPNetwork::processReceivedData(
     std::shared_ptr<std::vector<uint8_t>> receiveBuffer,
     std::shared_ptr<boost::asio::ip::udp::endpoint> senderEndpoint)
 {
+    constexpr size_t CUSTOM_HEADER_SIZE = 16;
+    constexpr size_t NONCE_LENGTH = crypto_box_NONCEBYTES;
+    constexpr size_t MAC_LENGTH = crypto_box_MACBYTES;
+    
     // Skip if we don't have enough data for header
-    if (bytesTransferred < 16)
+    if (bytesTransferred < CUSTOM_HEADER_SIZE)
     {
         NETWORK_LOG_ERROR("[Network] Received packet too small: {} bytes", bytesTransferred);
         return;
@@ -582,11 +622,15 @@ void UDPNetwork::processReceivedData(
             
         case PacketType::MESSAGE:
         {
-            // Get message length
-            uint32_t msgLen = (buffer[12] << 24) | (buffer[13] << 16) | (buffer[14] << 8) | buffer[15];
-            
+            if (bytesTransferred < CUSTOM_HEADER_SIZE + NONCE_LENGTH + MAC_LENGTH)
+            {
+                NETWORK_LOG_ERROR("[Network] Received WinTun packet too small: {} bytes", bytesTransferred);
+                return;
+            }
+            uint32_t winTunPacketSize = (buffer[12] << 24) | (buffer[13] << 16) | (buffer[14] << 8) | buffer[15];
+            size_t wholePacketSize = CUSTOM_HEADER_SIZE + NONCE_LENGTH + MAC_LENGTH + winTunPacketSize;
             // Validate message length
-            if (16 + msgLen > bytesTransferred)
+            if (wholePacketSize > bytesTransferred)
             {
                 NETWORK_LOG_ERROR("[Network] Message length exceeds packet size");
                 return;
@@ -610,11 +654,31 @@ void UDPNetwork::processReceivedData(
                 });
 
             // Extract wintun packet
-            std::vector<uint8_t> tunPacket(msgLen);
-            std::memcpy(tunPacket.data(), buffer.data() + 16, msgLen);
+            // std::vector<uint8_t> tunPacket(winTunPacketSize);
+            // std::memcpy(tunPacket.data(), buffer.data() + 16, winTunPacketSize);
+
+            // Packet pointer position helpers for decryption
+            uint8_t* basePos = receiveBuffer->data();
+            uint8_t* noncePos = basePos + CUSTOM_HEADER_SIZE;
+            uint8_t* macPos = noncePos + NONCE_LENGTH;
+            uint8_t* encrPos = macPos + MAC_LENGTH;
+
+            // Decrypt
+            size_t encrSize = bytesTransferred - CUSTOM_HEADER_SIZE - NONCE_LENGTH;
+            if (crypto_box_open_easy_afternm(
+                macPos, // dest
+                macPos, // source,
+                encrSize,
+                noncePos, // nonce
+                peerConnection.getSharedKey().data()) != 0)
+            {
+                NETWORK_LOG_ERROR("[Network] Failed to decrypt message from peer: {}", senderEndpoint->address().to_string());
+                return;
+            }
             
             // Process message, send to wintun interface
-            deliverPacketToTun(std::move(tunPacket));
+            std::uint8_t* wintTunPacketPos = macPos;
+            deliverPacketToTun({wintTunPacketPos, wintTunPacketPos + winTunPacketSize});
             break;
         }
         case PacketType::ACK:
