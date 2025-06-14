@@ -1,4 +1,4 @@
-export const startConnectionWithPeers = async (peerInfo, selfIndex, shouldFail = false) => {
+export const startConnectionWithPeers = async (peers, selfIndex, shouldFail = false) => {
   try {
     if (!window.electron?.grpc?.startConnection) {
       console.error('gRPC startConnection not available');
@@ -8,8 +8,8 @@ export const startConnectionWithPeers = async (peerInfo, selfIndex, shouldFail =
       };
     }
 
-    console.log('Starting connection with peers:', { peerInfo, selfIndex });
-    const result = await window.electron.grpc.startConnection(peerInfo, selfIndex, shouldFail);
+    console.log('Starting connection with peers:', { peers, selfIndex });
+    const result = await window.electron.grpc.startConnection(peers, selfIndex, shouldFail);
     console.log('Connection result:', result);
     
     return result;

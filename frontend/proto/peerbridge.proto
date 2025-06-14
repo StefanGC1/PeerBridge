@@ -54,9 +54,15 @@ message StopProcessResponse
     string message = 2;
 }
 
+// Peer information structure
+message PeerInfo {
+    string stun_info = 1;
+    bytes public_key = 2;
+}
+
 // Request message for StartConnection
 message StartConnectionRequest {
-    repeated string peer_info = 1;
+    repeated PeerInfo peers = 1;
     int32 self_index = 2;
     bool should_fail = 3;
 }

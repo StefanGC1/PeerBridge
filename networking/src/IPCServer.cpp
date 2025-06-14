@@ -87,7 +87,13 @@ grpc::Status IPCServer::GetStunInfo(
         reply->set_public_port(stunInfo.publicPort);
         reply->set_public_key(stunInfo.publicKey.data(), stunInfo.publicKey.size());
         reply->set_error_message("");
-        SYSTEM_LOG_INFO("[IPCServer]: Returning STUN info - IP: {}, Port: {}, and public key", stunInfo.publicIp, stunInfo.publicPort);
+        SYSTEM_LOG_INFO("[IPCServer]: Returning STUN info - IP: {}, Port: {}, and public key {:02X} {:02X} {:02X} {:02X} {:02X}",
+            stunInfo.publicIp, stunInfo.publicPort,
+            static_cast<unsigned>(stunInfo.publicKey[0]),
+            static_cast<unsigned>(stunInfo.publicKey[1]),
+            static_cast<unsigned>(stunInfo.publicKey[2]),
+            static_cast<unsigned>(stunInfo.publicKey[3]),
+            static_cast<unsigned>(stunInfo.publicKey[4]));
         return grpc::Status::OK;
     }
     else
@@ -148,10 +154,25 @@ grpc::Status IPCServer::StartConnection(
         return grpc::Status::OK;
     }
 
-    std::vector<std::string> peerInfo;
-    for (int i = 0; i < request->peer_info_size(); i++)
+    std::vector<std::pair<std::string, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>> peerInfo;
+    for (int i = 0; i < request->peers_size(); i++)
     {
-        peerInfo.push_back(request->peer_info(i));
+        // DEBUG LOG
+        const peerbridge::PeerInfo& peer = request->peers(i);
+        SYSTEM_LOG_INFO("[IPCServer] Iteration {}: public_key().size() = {}", i, peer.public_key().size());
+        std::array<uint8_t, crypto_box_PUBLICKEYBYTES> publicKey{};
+        
+        // Copy public key if available, otherwise use empty array
+        if (peer.public_key().size() == crypto_box_PUBLICKEYBYTES)
+        {
+            // std::copy(peer.public_key().begin(), peer.public_key().end(), publicKey.begin());
+            std::copy_n(
+                reinterpret_cast<const uint8_t*>(peer.public_key().data()),
+                crypto_box_PUBLICKEYBYTES,
+                publicKey.begin());
+        }
+        
+        peerInfo.push_back({peer.stun_info(), publicKey});
     }
 
     int self_index = request->self_index();
@@ -161,7 +182,17 @@ grpc::Status IPCServer::StartConnection(
     SYSTEM_LOG_INFO("[IPCServer]: Received peer info:");
     for (size_t i = 0; i < peerInfo.size(); i++)
     {
-        SYSTEM_LOG_INFO("[IPCServer] {}: {}", i, peerInfo[i]);
+        if (peerInfo[i].second.size() > 0) {
+            SYSTEM_LOG_INFO("[IPCServer] {}: {}, with public key {:02X} {:02X} {:02X} {:02X} {:02X}",
+                i, peerInfo[i].first,
+                peerInfo[i].second[0],
+                peerInfo[i].second[1],
+                peerInfo[i].second[2],
+                peerInfo[i].second[3],
+                peerInfo[i].second[4]);
+        } else {
+            SYSTEM_LOG_INFO("[IPCServer] {}: {}, no public key", i, peerInfo[i].first);
+        }
     }
 
     NetworkConfigManager::SetupConfig setupConfig = networkConfigManager.getSetupConfig();
@@ -177,16 +208,20 @@ grpc::Status IPCServer::StartConnection(
     }
 
     SYSTEM_LOG_INFO("[IPCServer]: Parsed following peer map:");
-    for (const auto& [virtualIp, publicIpAndPort] : peerMap)
+    for (const auto& [virtualIp, peerData] : peerMap)
     {
-        SYSTEM_LOG_INFO("[IPCServer] Virtual IP: {}, Public IP: {}, Port: {}",
+        const auto& [ipAndPort, publicKey] = peerData;
+        SYSTEM_LOG_INFO("[IPCServer] Virtual IP: {}, Public IP: {}, Port: {}, Has public key: {}",
             utils::uint32ToIp(virtualIp),
-            utils::uint32ToIp(publicIpAndPort.first),
-            publicIpAndPort.second);
+            utils::uint32ToIp(ipAndPort.first),
+            ipAndPort.second,
+            (publicKey.size() > 0 ? "true" : "false"));
     }
 
+    // Commenting out the event queueing as requested
     SYSTEM_LOG_INFO("[IPCServer]: Queueing initialize connection event");
     stateManager->queueEvent(NetworkEventData(NetworkEvent::INITIALIZE_CONNECTION, std::make_pair(self_index, peerMap)));
+    SYSTEM_LOG_INFO("[IPCServer]: Event queueing completed");
     bool success = true;
 
     reply->set_success(success);

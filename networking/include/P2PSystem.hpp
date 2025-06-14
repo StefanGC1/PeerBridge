@@ -55,7 +55,7 @@ private:
 
     // Initialize connection
     void initializeConnectionData(
-        const std::pair<int, std::map<uint32_t, std::pair<std::uint32_t, int>>>&);
+        const NetworkEventData::SelfIndexAndPeerMap&);
 
     // Data
     NetworkConfigManager::ConnectionConfig currentConnectionConfig;

@@ -351,7 +351,7 @@ void P2PSystem::handleNetworkEvent(const NetworkEventData& event)
 }
 
 void P2PSystem::initializeConnectionData(
-    const std::pair<int, std::map<uint32_t, std::pair<std::uint32_t, int>>>& selfIndexAndPeerMap)
+    const NetworkEventData::SelfIndexAndPeerMap& selfIndexAndPeerMap)
 {
     int selfIndex = selfIndexAndPeerMap.first;
     auto peerMap = selfIndexAndPeerMap.second;
@@ -374,7 +374,7 @@ void P2PSystem::initializeConnectionData(
     // Call startConnection from networkModule with post
     boost::asio::post(networkModule->getIOContext(), [this, selfIp, selfIndexAndPeerMap]()
     {
-        networkModule->startConnection(selfIp, selfIndexAndPeerMap.second);
+        networkModule->startConnection(selfIp, this->secretKey, selfIndexAndPeerMap.second);
     });
 }
 

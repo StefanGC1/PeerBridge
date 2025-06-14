@@ -492,8 +492,8 @@ def get_peer_info(lobby_id):
     # Get all online users
     online_users = OnlineUser.get_all_online_users()
     
-    # Build peer info list with connection strings
-    peer_info = []
+    # Build peer info list with connection strings and public keys
+    peers = []
     # TODO: Maybe remove self_index later.
     self_index = -1
     
@@ -504,16 +504,28 @@ def get_peer_info(lobby_id):
             
             if member_id == current_user_id:
                 self_index = i
-                peer_info.append("self")
+                peers.append({
+                    "stun_info": "self",
+                    "public_key": ""  # Empty public key for self
+                })
             elif connection_string == "0":
-                peer_info.append("unavailable")
+                peers.append({
+                    "stun_info": "unavailable",
+                    "public_key": ""  # Empty public key for unavailable
+                })
             else:
-                peer_info.append(connection_string)
+                peers.append({
+                    "stun_info": connection_string,
+                    "public_key": user_data.get('public_key', '')
+                })
         else:
             # User is not online, add placeholder
-            peer_info.append("unavailable")
+            peers.append({
+                "stun_info": "unavailable",
+                "public_key": ""  # Empty public key for unavailable
+            })
     
     return jsonify({
-        "peer_info": peer_info,
+        "peers": peers,
         "self_index": self_index
     }), 200

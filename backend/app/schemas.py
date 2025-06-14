@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict, field
 import math
+import base64
 from typing import List, Dict, Optional, Any
 import json
 import uuid
@@ -28,15 +29,11 @@ class OnlineUser:
         data = redis_inst.hgetall(key)
 
         public_key_hex = data.get('public_key', '')
-        if isinstance(public_key_hex, (bytes, bytearray)):
-            # If ``decode_responses`` is False, we will get raw bytes – convert to str first
-            public_key_hex = public_key_hex.decode("ascii", errors="ignore")
-
         public_key_bytes = bytes.fromhex(public_key_hex) if public_key_hex else b''
 
         return cls(
             user_id=user_id,
-            ip=data.get('ip', '') if data.get('ip') is not None else '',
+            ip=data.get('ip', ''),
             port=int(data.get('port', 0) or 0),
             public_key=public_key_bytes,
             last_active=data.get('last_active', datetime.utcnow().isoformat())
@@ -50,13 +47,11 @@ class OnlineUser:
         # Update last_active timestamp if not explicitly setting it
         if not hasattr(self, 'last_active') or not self.last_active:
             self.last_active = datetime.utcnow().isoformat()
-        
-        # Store the public key as **hex-encoded** string to ensure it remains ASCII and
-        # therefore compatible with ``decode_responses=True``
+
         data = {
             'ip': self.ip,
             'port': str(self.port),
-            'public_key': self.public_key.hex() if isinstance(self.public_key, (bytes, bytearray)) else str(self.public_key),
+            'public_key': self.public_key.hex(),
             'last_active': self.last_active
         }
         

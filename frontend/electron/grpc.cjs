@@ -118,18 +118,31 @@ function stopProcess() {
 }
 
 // Start connection with peers
-function startConnection(peerInfo, selfIndex, shouldFail = false) {
+function startConnection(peerInfoArray, selfIndex, shouldFail = false) {
   return new Promise((resolve, reject) => {
     const client = connectGrpcClient();
     
+    // Convert the array of peer info to the new format with PeerInfo objects
+    const peers = peerInfoArray.map(peer => {
+      const hex = Array.isArray(peer.public_key)
+                      ? Buffer.from(peer.public_key).toString('hex')
+                      : peer.public_key;
+      return {
+        stun_info: peer.stun_info,
+        public_key: hex
+                    ? Buffer.from(hex, 'hex')
+                    : Buffer.alloc(0)
+      };
+    });
+    
     console.log("Calling startConnection with:", {
-      peer_info: peerInfo,
+      peers: peers.map(p => ({ stun_info: p.stun_info, has_key: p.public_key.length > 0 })),
       self_index: selfIndex,
       should_fail: shouldFail
     });
     
     client.startConnection({
-      peer_info: peerInfo,
+      peers: peers,
       self_index: selfIndex,
       should_fail: shouldFail
     }, (error, response) => {

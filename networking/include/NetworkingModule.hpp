@@ -28,7 +28,10 @@ public:
     
     // Setup and connection
     bool startListening(int port);
-    bool startConnection(uint32_t, std::map<uint32_t, std::pair<std::uint32_t, int>>);
+    bool startConnection(
+        uint32_t,
+        const std::array<uint8_t, crypto_box_SECRETKEYBYTES>&,
+        std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>>);
     
     // Disconnet and shutdown
     void stopConnection();

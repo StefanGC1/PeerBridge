@@ -9,6 +9,7 @@
 #include <string>
 #include <map>
 #include <boost/asio/ip/udp.hpp>
+#include <sodium/crypto_box.h>
 
 // System states
 enum class SystemState
@@ -45,7 +46,8 @@ inline std::string toString(SystemState state)
 // Event data to be sent by the network module
 struct NetworkEventData
 {
-    using SelfIndexAndPeerMap = std::pair<int, std::map<uint32_t, std::pair<std::uint32_t, int>>>;
+    // pair<self_index, Map vIP -> ( pair<peer IP, peer port>, public key)>
+    using SelfIndexAndPeerMap = std::pair<int, std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>>>;
     NetworkEvent event;
     std::variant<
         std::monostate,
@@ -95,8 +97,11 @@ private:
 class PeerConnectionInfo
 {
 public:
+    using SharedKey = std::array<uint8_t, crypto_box_BEFORENMBYTES>;
+
     PeerConnectionInfo();
     PeerConnectionInfo(const boost::asio::ip::udp::endpoint&);
+    PeerConnectionInfo(const boost::asio::ip::udp::endpoint&, const PeerConnectionInfo::SharedKey&);
     
     // Last active time (receive timestamp)
     void updateActivity();
@@ -112,8 +117,12 @@ public:
     // Access last activity time for monitoring
     std::chrono::steady_clock::time_point getLastActivity() const;
     
+    // Access shared key for encryption
+    const SharedKey& getSharedKey() const;
+    
 private:
     std::chrono::steady_clock::time_point lastActivity;
     bool connected;
     boost::asio::ip::udp::endpoint peerEndpoint;
+    SharedKey sharedKey;
 };

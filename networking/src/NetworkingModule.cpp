@@ -89,7 +89,10 @@ bool UDPNetwork::startListening(int port)
     }
 }
 
-bool UDPNetwork::startConnection(uint32_t selfIp, std::map<uint32_t, std::pair<std::uint32_t, int>> virtualIpToPublicIpAndPort)
+bool UDPNetwork::startConnection(
+    uint32_t selfIp,
+    const std::array<uint8_t, crypto_box_SECRETKEYBYTES>& selfSecretKey,
+    std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>> virtualIpToPublicIpPortAndKey)
 {
     for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
     {
@@ -100,16 +103,43 @@ bool UDPNetwork::startConnection(uint32_t selfIp, std::map<uint32_t, std::pair<s
         }
     }
 
-    selfVirtualIp = selfIp;
-    virtualIpToPublicIp = virtualIpToPublicIpAndPort;
-    for (const auto& [virtualIp, publicIpAndPort] : virtualIpToPublicIp)
+    // construct virtualIpToPublicIp
+    std::map<uint32_t, std::pair<std::uint32_t, int>> _virtualIpToPublicIp;
+    for (const auto& [virtualIp, publicIpAndPortAndKey] : virtualIpToPublicIpPortAndKey)
     {
-        uint32_t publicIp = publicIpAndPort.first;
-        int port = publicIpAndPort.second;
+        _virtualIpToPublicIp[virtualIp] = publicIpAndPortAndKey.first;
+    }
+
+    selfVirtualIp = selfIp;
+    virtualIpToPublicIp = _virtualIpToPublicIp;
+
+    // construct publicIpToPeerConnection
+    for (const auto& [virtualIp, publicIpPortAndKey] : virtualIpToPublicIpPortAndKey)
+    {
+        uint32_t publicIp = publicIpPortAndKey.first.first;
+        int port = publicIpPortAndKey.first.second;
+        std::array<uint8_t, crypto_box_PUBLICKEYBYTES> publicKey = publicIpPortAndKey.second;
 
         boost::asio::ip::address addr = boost::asio::ip::make_address(utils::uint32ToIp(publicIp));
         boost::asio::ip::udp::endpoint peerEndpoint(addr, port);
-        publicIpToPeerConnection[publicIp] = PeerConnectionInfo(peerEndpoint);
+        PeerConnectionInfo::SharedKey sharedKey;
+        
+        if (crypto_box_beforenm(sharedKey.data(), publicKey.data(), selfSecretKey.data()) == -1)
+        {
+            SYSTEM_LOG_ERROR("[Network] Failed to construct shared key for peer {}", utils::uint32ToIp(publicIp));
+            continue;
+        }
+
+        publicIpToPeerConnection[publicIp] = PeerConnectionInfo(peerEndpoint, sharedKey);
+
+        SYSTEM_LOG_INFO(
+            "[Network] Constructed shared key for peer {}: {:02X} {:02X} {:02X} {:02X} {:02X}",
+            utils::uint32ToIp(publicIp),
+            static_cast<unsigned>(sharedKey[0]),
+            static_cast<unsigned>(sharedKey[1]),
+            static_cast<unsigned>(sharedKey[2]),
+            static_cast<unsigned>(sharedKey[3]),
+            static_cast<unsigned>(sharedKey[4]));
     }
 
     // Start hole punching process
@@ -296,6 +326,9 @@ bool UDPNetwork::sendMessage(
     try
     {
         // Calculate total packet size: header (16 bytes) + message
+        constexpr size_t CUSTOM_HEADER_SIZE = 16;
+        constexpr size_t NONCE_LENGTH = crypto_box_NONCEBYTES;
+        constexpr size_t MAC_LENGTH = crypto_box_MACBYTES;
         size_t packetSize = 16 + dataToSend.size();
         if (packetSize > MAX_PACKET_SIZE)
         {

@@ -1,3 +1,4 @@
+import base64
 import math
 from flask import copy_current_request_context, request, current_app, session
 from flask_socketio import emit, join_room, leave_room

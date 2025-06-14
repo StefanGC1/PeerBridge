@@ -87,14 +87,25 @@ bool SystemStateManager::hasEvents() const
     return !eventQueue.empty();
 }
 
+// Not used anymore
 PeerConnectionInfo::PeerConnectionInfo() : connected(false)
 {
     updateActivity();
 }
 
+// Not used anymore
 PeerConnectionInfo::PeerConnectionInfo(const boost::asio::ip::udp::endpoint& endpoint) : connected(false)
 {
     peerEndpoint = endpoint;
+    updateActivity();
+}
+
+PeerConnectionInfo::PeerConnectionInfo(
+    const boost::asio::ip::udp::endpoint& endpoint,
+    const PeerConnectionInfo::SharedKey& sharedKey) : connected(false)
+{
+    peerEndpoint = endpoint;
+    this->sharedKey = sharedKey;
     updateActivity();
 }
 
@@ -130,4 +141,9 @@ std::chrono::steady_clock::time_point PeerConnectionInfo::getLastActivity() cons
 boost::asio::ip::udp::endpoint PeerConnectionInfo::getPeerEndpoint() const
 {
     return peerEndpoint;
+}
+
+const PeerConnectionInfo::SharedKey& PeerConnectionInfo::getSharedKey() const
+{
+    return sharedKey;
 }

@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 #include <map>
+#include <array>
+#include <sodium.h>
 
 namespace NetworkConstants
 {
@@ -71,19 +73,19 @@ inline std::pair<std::string, std::string> splitIpPort(const std::string& ipPort
     
     return {ip, port};
 }
-// Map vIP -> (peer IP, peer port)
+// Map vIP -> ( pair<peer IP, peer port>, public key)
 // Skip self or unavailable peers
-inline std::map<uint32_t, std::pair<std::uint32_t, int>> parsePeerInfo(
-    const std::vector<std::string>& peerInfo,
+inline std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>> parsePeerInfo(
+    const std::vector<std::pair<std::string, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>>& peerInfo,
     const std::string& baseIPSpace,
     const int selfIndex)
 {
-    std::map<uint32_t, std::pair<std::uint32_t, int>> peerMap;
+    std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>> peerMap;
     uint32_t vIPIndex = NetworkConstants::START_IP_INDEX;
 
     for (size_t i = 0; i < peerInfo.size(); i++)
     {
-        if (peerInfo[i] == "self")
+        if (peerInfo[i].first == "self")
         {
             SYSTEM_LOG_INFO("[Utils]: Skipping self index: {}", i);
             if (i != selfIndex)
@@ -94,20 +96,20 @@ inline std::map<uint32_t, std::pair<std::uint32_t, int>> parsePeerInfo(
             vIPIndex++;
             continue;
         }
-        if (peerInfo[i] == "unavailable")
+        if (peerInfo[i].first == "unavailable")
         {
             continue;
         }
 
-        auto [ip, port] = splitIpPort(peerInfo[i]);
+        auto [ip, port] = splitIpPort(peerInfo[i].first);
         if (ip.empty() || port.empty())
         {
-            SYSTEM_LOG_ERROR("[Utils]: Invalid peer info: {}", peerInfo[i]);
+            SYSTEM_LOG_ERROR("[Utils]: Invalid peer info: {}", peerInfo[i].first);
             return {};
         }
         uint32_t virtualIp = utils::ipToUint32(baseIPSpace + std::to_string(vIPIndex));
         uint32_t ipInt = utils::ipToUint32(ip);
-        peerMap[virtualIp] = {ipInt, std::stoi(port)};
+        peerMap[virtualIp] = {{ipInt, std::stoi(port)}, peerInfo[i].second};
         vIPIndex++;
     }
 

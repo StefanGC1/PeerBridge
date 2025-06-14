@@ -70,12 +70,11 @@ export function LobbyProvider({ children }) {
         getPeerInfo(updatedLobby.id)
           .then(peerInfo => {
             console.log('Peer connection info received:', peerInfo);
-            
-            // Immediately attempt connection with the C++ module
+
             return startConnectionWithPeers(
-              peerInfo.peer_info,
+              peerInfo.peers,
               peerInfo.self_index,
-              false // shouldFail - set to false by default
+              false // shouldFail - testing param
             );
           })
           .then(result => {
