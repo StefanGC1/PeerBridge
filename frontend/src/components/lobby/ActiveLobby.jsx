@@ -163,7 +163,7 @@ function ActiveLobby() {
         </div>
 
         {showSettings && isHost && (
-          <div className="mb-6 p-4 bg-background rounded-lg">
+          <div className="mb-8 p-4 bg-background rounded-lg shadow-md">
             <h3 className="text-sm font-medium mb-3">Lobby Settings</h3>
             
             {error && (
@@ -253,7 +253,7 @@ function ActiveLobby() {
                 className="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50"
               >
                 <div className="flex items-center">
-                  <StatusIndicator 
+                  <StatusIndicator
                     status={activeLobby.members_status?.[memberId] || "disconnected"} 
                     className="mr-2"
                   />
@@ -277,7 +277,7 @@ function ActiveLobby() {
         </div>
       </div>
       
-      <div className="bg-accent/50 p-4 flex justify-between items-center border-t border-border">
+      <div className="bg-secondary/40 p-4 flex justify-between items-center border-t border-border">
         <div className="text-sm flex items-center">
           <StatusIndicator status={activeLobby.status || "idle"} className="mr-2" />
           <span className="capitalize">{activeLobby.status || "idle"}</span>
@@ -290,7 +290,7 @@ function ActiveLobby() {
               onClick={handleStartLobby}
             >
               <Play size={16} />
-              Start Game
+              Start Lobby
             </button>
           ) : (
             <button 
@@ -299,7 +299,7 @@ function ActiveLobby() {
               onClick={handleStopLobby}
             >
               <Square size={16} />
-              Stop Game
+              Stop Lobby
             </button>
           )
         )}

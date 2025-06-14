@@ -52,9 +52,12 @@ string removeLastEntryInPath(const string& path)
 
 string initializeLogDirectory()
 {
+    const filesystem::path currentPath = filesystem::current_path();
+    const filesystem::path absoluteCurrentPath = currentPath.is_absolute() ? currentPath : filesystem::absolute(currentPath);
+
     const string dateFormat = "%Y-%m-%d_%H-%M";
     const string currentTimeString = timeToString(chrono::system_clock::now(), dateFormat);
-    const filesystem::path logsDir = filesystem::path("cpp") / "logs";
+    const filesystem::path logsDir = absoluteCurrentPath/ "cpp" / "logs";
     const filesystem::path currentLogDir = logsDir / currentTimeString;
 
     if (filesystem::exists(logsDir))
@@ -74,14 +77,13 @@ string initializeLogDirectory()
     }
     else
     {
-        if (!filesystem::create_directory(logsDir));
+        if (!filesystem::create_directories(logsDir))
         {
             // THIS MAY CAUSE PROBLEMS
             cerr << "[ERROR] Creating log folder failed, stopping process..." << endl;
         }
     }
 
-    filesystem::create_directory(currentLogDir);
     return currentLogDir.string();
 }
 

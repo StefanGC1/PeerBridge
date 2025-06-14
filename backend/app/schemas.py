@@ -12,6 +12,7 @@ class OnlineUser:
     user_id: str
     ip: str
     port: int
+    public_key: bytes
     # TODO: This is redundant here, move this to db model if necessary
     last_active: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     
@@ -25,10 +26,19 @@ class OnlineUser:
             return None
         
         data = redis_inst.hgetall(key)
+
+        public_key_hex = data.get('public_key', '')
+        if isinstance(public_key_hex, (bytes, bytearray)):
+            # If ``decode_responses`` is False, we will get raw bytes – convert to str first
+            public_key_hex = public_key_hex.decode("ascii", errors="ignore")
+
+        public_key_bytes = bytes.fromhex(public_key_hex) if public_key_hex else b''
+
         return cls(
             user_id=user_id,
-            ip=data.get('ip', ''),
-            port=int(data.get('port', 0)),
+            ip=data.get('ip', '') if data.get('ip') is not None else '',
+            port=int(data.get('port', 0) or 0),
+            public_key=public_key_bytes,
             last_active=data.get('last_active', datetime.utcnow().isoformat())
         )
     
@@ -41,10 +51,12 @@ class OnlineUser:
         if not hasattr(self, 'last_active') or not self.last_active:
             self.last_active = datetime.utcnow().isoformat()
         
-        # Convert to dict and save to Redis
+        # Store the public key as **hex-encoded** string to ensure it remains ASCII and
+        # therefore compatible with ``decode_responses=True``
         data = {
             'ip': self.ip,
             'port': str(self.port),
+            'public_key': self.public_key.hex() if isinstance(self.public_key, (bytes, bytearray)) else str(self.public_key),
             'last_active': self.last_active
         }
         
@@ -60,8 +72,11 @@ class OnlineUser:
         return True
     
     def to_dict(self):
-        """Convert to dictionary"""
-        return asdict(self)
+        """Convert to dictionary that is JSON serialisable (public_key as hex str)"""
+        d = asdict(self)
+        if isinstance(self.public_key, (bytes, bytearray)):
+            d['public_key'] = self.public_key.hex()
+        return d
     
     @classmethod
     def get_all_online_users(cls, redis_instance=None):

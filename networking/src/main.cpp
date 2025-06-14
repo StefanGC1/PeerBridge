@@ -9,14 +9,13 @@
 #include <csignal>
 #include <boost/stacktrace.hpp>
 
-// Global variables
-static std::atomic<bool> g_running = true;
+// Global system variable
 static std::unique_ptr<P2PSystem> p2pSystem;
 
 // Signal handler for graceful shutdown
 void signalHandler(int signal)
 {
-    g_running = false;
+    p2pSystem->setRunningFalse();
 }
 
 static std::string stackTraceToString()
@@ -59,11 +58,11 @@ static void onSignal(int sig)
 
 int main(int argc, char* argv[])
 {
-    // Init logging
     initLogging();
+
     // Setup signal handlers
     std::set_terminate(onTerminate);
-
+    // An attempt was made
     signal(SIGINT, signalHandler);
     std::signal(SIGSEGV, onSignal);
     std::signal(SIGABRT, onSignal);
@@ -77,8 +76,7 @@ int main(int argc, char* argv[])
     SYSTEM_LOG_INFO("Starting P2P System application...");
     int localPort = 0; // Let system automatically choose a port
     p2pSystem = std::make_unique<P2PSystem>();
-    
-    // Initialize the application
+
     if (!p2pSystem->initialize(localPort))
     {
         SYSTEM_LOG_ERROR("Failed to initialize the application. Exiting.");
@@ -86,15 +84,14 @@ int main(int argc, char* argv[])
     }
     
     SYSTEM_LOG_INFO("P2P System initialized successfully. Main thread going to sleep.");
-    // Main loop (status updates, etc.)
-    while (g_running)
+    while (p2pSystem->isRunning())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
-    // Cleanup - use full shutdown at program exit
+
     p2pSystem->shutdown();
+    p2pSystem->cleanup();
     
-    SYSTEM_LOG_INFO("Application exiting. Goodbye!");
-    return 0;
+    SYSTEM_LOG_INFO("Application exiting.");
+    std::_Exit(EXIT_SUCCESS);
 }

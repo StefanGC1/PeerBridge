@@ -83,7 +83,6 @@ include_directories(${WINTUN_INCLUDE_DIR})
 include_directories("${CMAKE_SOURCE_DIR}/include")
 set(SOURCES
     src/main.cpp
-    src/Crypto.cpp
     src/NetworkingModule.cpp
     src/Stun.cpp
     src/P2PSystem.cpp

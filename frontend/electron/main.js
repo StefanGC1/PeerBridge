@@ -22,12 +22,18 @@ if (!isDev) {
 let mainWindow;
 
 function createWindow() {
+  let iconPath = join(
+    app.getAppPath(),
+    isDev ? 'public/logo.ico' : '../public/logo.ico'
+  )
+
   // Create the browser window
   const preloadPath = join(
     app.getAppPath(), './electron/preload.cjs'); 
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 900,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -116,9 +122,8 @@ ipcMain.handle('grpc:cleanup', async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // Clean up the networking module
-    cleanup();
     app.quit();
+    cleanup();
   }
 });
 

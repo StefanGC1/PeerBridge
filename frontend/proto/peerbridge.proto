@@ -3,7 +3,8 @@ syntax = "proto3";
 package peerbridge;
 
 // Service definition for PeerBridge
-service PeerBridgeService {
+service PeerBridgeService
+{
     // RPC to get STUN information (public IP and port)
     rpc GetStunInfo (StunInfoRequest) returns (StunInfoResponse);
     // RPC to stop the process
@@ -17,7 +18,8 @@ service PeerBridgeService {
 }
 
 // Connection status enum
-enum ConnectionStatus {
+enum ConnectionStatus
+{
     IDLE = 0;
     CONNECTING = 1; 
     CONNECTED = 2;
@@ -25,34 +27,38 @@ enum ConnectionStatus {
 }
 
 // Request message for GetStunInfo
-message StunInfoRequest {
-    // Could be empty if no parameters are needed from client for this call
+message StunInfoRequest
+{
+    // No parameters needed
 }
 
 // Response message for GetStunInfo
-message StunInfoResponse {
+message StunInfoResponse
+{
     string public_ip = 1;
     int32 public_port = 2;
-    string error_message = 3; // In case of an error fetching STUN info
+    bytes public_key = 3;
+    string error_message = 4;
 }
 
 // Request message for StopProcess
-message StopProcessRequest {
-    // Could include confirmation or additional parameters
-    bool force = 1; // Whether to force stop without waiting for clean shutdown
+message StopProcessRequest
+{
+    bool force = 1;
 }
 
 // Response message for StopProcess
-message StopProcessResponse {
+message StopProcessResponse
+{
     bool success = 1;
     string message = 2;
 }
 
 // Request message for StartConnection
 message StartConnectionRequest {
-    repeated string peer_info = 1; // List of peer connection strings (ip:port)
-    int32 self_index = 2;        // Index of self in the peer_info list
-    bool should_fail = 3;        // Temporary testing flag to simulate failure
+    repeated string peer_info = 1;
+    int32 self_index = 2;
+    bool should_fail = 3;
 }
 
 // Response message for StartConnection
@@ -63,7 +69,7 @@ message StartConnectionResponse {
 
 // Request message for StopConnection
 message StopConnectionRequest {
-    // Currently empty, may add parameters in the future
+    // No parameters needed
 }
 
 // Response message for StopConnection
@@ -74,7 +80,7 @@ message StopConnectionResponse {
 
 // Request message for GetConnectionStatus
 message GetConnectionStatusRequest {
-    // Empty - no parameters needed
+    // No parameters needed
 }
 
 // Response message for GetConnectionStatus  

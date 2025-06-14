@@ -6,14 +6,19 @@
 #include "peerbridge.grpc.pb.h"
 #include <functional>
 #include <string>
+#include <sodium.h>
 
 class IPCServer final : public peerbridge::PeerBridgeService::Service {
 public:
+    struct StunInfo
+    {
+        std::string publicIp;
+        int publicPort;
+        std::array<uint8_t, crypto_box_PUBLICKEYBYTES>& publicKey;
+    };
     // Define callback types
-    using GetStunInfoCallback = std::function<std::pair<std::string, int>()>;
+    using GetStunInfoCallback = std::function<StunInfo()>;
     using ShutdownCallback = std::function<void(bool)>;
-    using StartConnectionCallback = std::function<bool(const std::vector<std::string>&, int)>;
-    using StopConnectionCallback = std::function<bool()>;
 
     IPCServer(
         std::shared_ptr<SystemStateManager>,
@@ -26,8 +31,6 @@ public:
     // Callback setters
     void setGetStunInfoCallback(GetStunInfoCallback);
     void setShutdownCallback(ShutdownCallback);
-    void setStartConnectionCallback(StartConnectionCallback);
-    void setStopConnectionCallback(StopConnectionCallback);
 
     // RPC method implementation for GetStunInfo
     grpc::Status GetStunInfo(
@@ -64,10 +67,8 @@ private:
 
     std::shared_ptr<SystemStateManager> stateManager;
     NetworkConfigManager& networkConfigManager;
-    
+
     // Callbacks
     GetStunInfoCallback getStunInfoCallback;
     ShutdownCallback shutdownCallback;
-    StartConnectionCallback startConnectionCallback;
-    StopConnectionCallback stopConnectionCallback;
 }; 

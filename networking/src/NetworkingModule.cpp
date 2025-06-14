@@ -514,6 +514,7 @@ void UDPNetwork::processReceivedData(
         SYSTEM_LOG_INFO("[Network] Received disconnect notification from peer");
         NETWORK_LOG_INFO("[Network] Received disconnect notification from peer");
         handleDisconnect(*senderEndpoint);
+        return;
     }
 
     // Consume packet if network not running

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { login } from '../../lib/api';
 import { initializeSocket } from '../../lib/socket';
+import logo from '../../assets/logo.png';
 
 function Login() {
   const navigate = useNavigate();
@@ -36,14 +37,28 @@ function Login() {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-primary/10 flex flex-col justify-center py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-background to-primary/10 flex flex-col">
+      <header className="flex justify-between items-center p-6">
+        <div className="flex items-center gap-2">
+          <img src={logo} alt="Logo" className="w-18 h-18" />
+          <h1 className="text-2xl font-bold text-foreground">PeerBridge</h1>
+        </div>
+        
+        <button 
+          onClick={toggleTheme} 
+          className="p-2 rounded-full bg-background hover:bg-primary/10 transition-colors"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      </header>
+
+      <main className="flex flex-1 flex-col items-center justify-center">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <Link to="/" className="flex items-center text-primary hover:text-primary-foreground transition-colors mb-5 gap-2">
           <ArrowLeft size={20} />
           <span>Back to Home</span>
         </Link>
-        
-        <img src="/src/assets/logo.svg" alt="Logo" className="mx-auto h-6 w-auto" />
+
         <h2 className="mt-5 text-center text-3xl font-extrabold text-foreground">
           Sign in to your account
         </h2>
@@ -113,12 +128,6 @@ function Login() {
                   Remember me
                 </label>
               </div>
-
-              <div className="text-sm">
-                <a href="#" className="font-medium text-primary hover:text-primary-foreground transition-colors">
-                  Forgot your password?
-                </a>
-              </div>
             </div>
 
             <div>
@@ -142,6 +151,9 @@ function Login() {
           </div>
         </div>
       </div>
+      </main>
+      <footer className="py-6 px-8 h-30 text-center text-sm text-muted-foreground">
+      </footer>
     </div>
   );
 }

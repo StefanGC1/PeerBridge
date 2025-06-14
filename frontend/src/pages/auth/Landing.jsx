@@ -12,8 +12,8 @@ function Landing() {
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-primary/10">
       <header className="flex justify-between items-center p-6">
         <div className="flex items-center gap-2">
-          <img src={logo} alt="Logo" className="w-8 h-8" />
-          <h1 className="text-2xl font-bold text-foreground">P2P App</h1>
+          <img src={logo} alt="Logo"className="w-18 h-18"/>
+          <h1 className="text-2xl font-bold text-foreground">PeerBridge</h1>
         </div>
         
         <button 
@@ -28,10 +28,10 @@ function Landing() {
         <div className="max-w-md w-full space-y-8 bg-card p-8 rounded-xl shadow-lg">
           <div className="text-center">
             <h2 className="text-3xl font-extrabold text-foreground mb-2">
-              Welcome to P2P App
+              Welcome to PeerBridge
             </h2>
             <p className="text-muted-foreground">
-              Connect and share with friends through our peer-to-peer network
+              Connect and share with friends through a peer-to-peer network
             </p>
           </div>
           
@@ -50,15 +50,10 @@ function Landing() {
               Create Account
             </button>
           </div>
-          
-          <p className="text-sm text-center text-muted-foreground mt-6">
-            By using P2P App, you agree to our <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>.
-          </p>
         </div>
       </main>
       
-      <footer className="py-6 px-8 text-center text-sm text-muted-foreground">
-        <p>© {new Date().getFullYear()} P2P App. All rights reserved.</p>
+      <footer className="py-6 px-8 h-30 text-center text-sm text-muted-foreground">
       </footer>
     </div>
   );

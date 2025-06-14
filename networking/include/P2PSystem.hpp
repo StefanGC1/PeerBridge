@@ -12,6 +12,7 @@
 #include <queue>
 #include <functional>
 #include <unordered_map>
+#include <sodium.h>
 
 // Forward declarations
 struct IPPacket;
@@ -29,6 +30,7 @@ public:
     // TODO: FOR *1, maybe make a peer-based stopConnection
     void stopConnection();
     void shutdown();
+    void cleanup();
     
     // Network interface
     bool startNetworkInterface();
@@ -36,6 +38,8 @@ public:
     
     // Status
     bool isConnected() const;
+    bool isRunning() const;
+    void setRunningFalse();
     
     // Connection monitoring
     void monitorLoop();
@@ -79,7 +83,14 @@ private:
     StunClient stunService;
     std::unique_ptr<UDPNetwork> networkModule;
     std::unique_ptr<TunInterface> tunInterface;
-    std::unique_ptr<IPCServer> ipcServer;
 
+    std::unique_ptr<IPCServer> ipcServer;
     std::thread ipcServerThread;
+
+    // Encryption
+    using PublicKey = std::array<uint8_t, crypto_box_PUBLICKEYBYTES>;
+    using SecretKey = std::array<uint8_t, crypto_box_SECRETKEYBYTES>;
+
+    PublicKey publicKey;
+    SecretKey secretKey;
 }; 

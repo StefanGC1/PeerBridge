@@ -1,3 +1,4 @@
+from datetime import timedelta
 from flask import Blueprint, request, jsonify, current_app
 from .extensions import db, socketio
 from .models import User
@@ -16,6 +17,7 @@ def register():
     data = request.get_json() or {}
     username = data.get('username')
     password = data.get('password')
+
     if not username or not password:
         return jsonify({'error': 'username and password required'}), 400
 
@@ -27,23 +29,48 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    return jsonify({'message': 'user registered', 'user_id': user.id}), 201
+    # Get STUN info from request
+    try:
+        user_ip = data.get('public_ip', '')
+        user_port = int(data.get('public_port', 0))
+        public_key = data.get('public_key', [])
+    except (ValueError, TypeError) as e:
+        current_app.logger.warning(f"Invalid STUN port format: {e}. Using default.")
+        user_ip = data.get('public_ip', '')
+        user_port = 0
+        public_key = []
+
+    user_id = user.id
+
+    public_key = bytes(public_key)
+
+    # Print STUN info to console
+    current_app.logger.debug(f"User {username} (ID: {user_id}) registered with STUN info - "
+                             f"IP: {user_ip}, Port: {user_port}, "
+                             f"Public Key: {public_key[:5].hex() if public_key else 'None'}")
+
+    # Store user in Redis using OnlineUser class
+    online_user = OnlineUser(
+        user_id=user_id,
+        ip=user_ip,
+        port=user_port,
+        public_key=public_key
+    )
+    online_user.save_to_redis(expire_seconds=60)  # 60 seconds initial TTL
+
+    access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=12))
+    return jsonify({
+        "message": f"User {user_id} registered",
+        "access_token": access_token,
+        "user_id": user_id,
+        "username": username
+    }), 201
 
 @bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
     username = data.get('username')
     password = data.get('password')
-    
-    # Get STUN info from request with better error handling
-    try:
-        user_ip = data.get('public_ip', '1.1.1.1')  # Default if not provided
-        user_port = int(data.get('public_port', 12345))  # Convert to int and use default if not provided
-    except (ValueError, TypeError) as e:
-        # Handle case where port is not a valid integer
-        current_app.logger.warning(f"Invalid STUN port format: {e}. Using default.")
-        user_ip = data.get('public_ip', '1.1.1.1')
-        user_port = 12345  # Use default
 
     if not username or not password:
         return jsonify({'error': 'username and password required'}), 400
@@ -51,21 +78,37 @@ def login():
     user = User.query.filter_by(username=username).first()
     if not user or not user.check_password(password):
         return jsonify({'error': 'invalid username or password'}), 401
+    
+    # Get STUN info from request
+    try:
+        user_ip = data.get('public_ip', '')
+        user_port = int(data.get('public_port', 0))
+        public_key = data.get('public_key', [])
+    except (ValueError, TypeError) as e:
+        current_app.logger.warning(f"Invalid STUN port format: {e}. Using default.")
+        user_ip = data.get('public_ip', '')
+        user_port = 0
+        public_key = []
 
     user_id = user.id
 
+    public_key = bytes(public_key)
+
     # Print STUN info to console
-    current_app.logger.debug(f"User {username} (ID: {user_id}) logged in with STUN info - IP: {user_ip}, Port: {user_port}")
+    current_app.logger.debug(f"User {username} (ID: {user_id}) logged in with STUN info - "
+                             f"IP: {user_ip}, Port: {user_port}, "
+                             f"Public Key: {public_key[:5].hex() if public_key else 'None'}")
 
     # Store user in Redis using OnlineUser class
     online_user = OnlineUser(
         user_id=user_id,
         ip=user_ip,
-        port=user_port
+        port=user_port,
+        public_key=public_key
     )
     online_user.save_to_redis(expire_seconds=60)  # 60 seconds initial TTL
 
-    access_token = create_access_token(identity=user.id)
+    access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=12))
     return jsonify({
         "message": f"User {user_id} logged in",
         "access_token": access_token,
@@ -219,29 +262,35 @@ def create_lobby():
 @jwt_required()
 def join_lobby(lobby_id):
     current_user_id = get_jwt_identity()
-    
-    # Get the lobby from Redis
+
     lobby = Lobby.from_redis(lobby_id)
+
+    # Temporary quality of life fix to join lobby by name
+    if not lobby:
+        all_lobbies = Lobby.get_all_lobbies()
+        target_lobby_data = next((l for l in all_lobbies if l.get("name") == lobby_id), None)
+        if target_lobby_data:
+            # Retrieve the lobby again by its real ID
+            real_id = target_lobby_data["id"]
+            lobby = Lobby.from_redis(real_id)
+            lobby_id = real_id
+
+    # Join checks
     if not lobby:
         return jsonify({"error": "Lobby not found"}), 404
-    
-    # Check if lobby is full
+
     if lobby.is_full():
         return jsonify({"error": "Lobby is full"}), 400
-    
-    # Check if lobby is in a state that allows joining
+
     if lobby.status != 'idle':
         return jsonify({"error": "Lobby is not open for joining"}), 400
-    
-    # Check if user is already in the lobby
+
     if lobby.is_member(current_user_id):
         return jsonify({"error": "Already in this lobby"}), 400
-    
-    # Add user to lobby
+
     lobby.add_member(current_user_id)
     lobby.save_to_redis()
-    
-    # Notify all members about the update
+
     socketio.emit('lobby_updated', lobby.to_dict(), room=f"lobby_{lobby_id}")
     
     return jsonify(lobby.to_dict()), 200
@@ -456,6 +505,8 @@ def get_peer_info(lobby_id):
             if member_id == current_user_id:
                 self_index = i
                 peer_info.append("self")
+            elif connection_string == "0":
+                peer_info.append("unavailable")
             else:
                 peer_info.append(connection_string)
         else:

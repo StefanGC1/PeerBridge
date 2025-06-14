@@ -33,7 +33,10 @@ def handle_connect(auth=None):
         if online_user:
             # Get current STUN info before making changes
             # TODO later: Remove this log
-            current_app.logger.debug(f'User {user_id} authenticated with STUN info: {online_user.to_dict()}')
+            current_app.logger.debug(f'User {user_id} authenticated with STUN info: '
+                                     f'IP: {online_user.ip}, '
+                                     f'Port: {online_user.port}, '
+                                     f'Public Key: {online_user.public_key[:5].hex() if online_user.public_key else "None"}') # TODO: Remove if later
             
             # Persist redis data
             online_user.save_to_redis(expire_seconds=math.inf)

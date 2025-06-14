@@ -101,6 +101,7 @@ function getStunInfo() {
       resolve({
         publicIp: response.public_ip,
         publicPort: response.public_port,
+        publicKey: response.public_key,
         errorMessage: response.error_message
       });
     });
@@ -182,10 +183,13 @@ async function cleanup() {
   }
   console.log("Stopping C++ module");
   const response = await stopProcess();
-  console.log("C++ module stopped with response:", response);
+  // Give C++ module time to exit gracefully
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  grpc.closeClient(grpcClient);
   networkProcess.kill();
-  grpcClient = null;
   networkProcess = null;
+  console.log("C++ module stopped with response:", response);
+  grpcClient = null;
 }
 
 module.exports = {

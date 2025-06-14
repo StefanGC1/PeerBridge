@@ -12,8 +12,6 @@ IPCServer::IPCServer(
     NetworkConfigManager& networkConfigManager)
     : getStunInfoCallback(nullptr)
     , shutdownCallback(nullptr)
-    , startConnectionCallback(nullptr)
-    , stopConnectionCallback(nullptr)
     , stateManager(stateManager)
     , networkConfigManager(networkConfigManager)
 {}
@@ -34,14 +32,6 @@ void IPCServer::setShutdownCallback(ShutdownCallback callback) {
     shutdownCallback = callback;
 }
 
-void IPCServer::setStartConnectionCallback(StartConnectionCallback callback) {
-    startConnectionCallback = callback;
-}
-
-void IPCServer::setStopConnectionCallback(StopConnectionCallback callback) {
-    stopConnectionCallback = callback;
-}
-
 void IPCServer::RunServer(const std::string& serverAddress)
 {
     grpc::ServerBuilder builder;
@@ -52,7 +42,7 @@ void IPCServer::RunServer(const std::string& serverAddress)
     if (server)
     {
         SYSTEM_LOG_INFO("[IPCServer] listening on {}", serverAddress);
-        // server->Wait(); // Blocking call, might run in a separate thread or handle differently
+        server->Wait();
     }
     else
     {
@@ -63,9 +53,8 @@ void IPCServer::RunServer(const std::string& serverAddress)
 void IPCServer::ShutdownServer() {
     if (server)
     {
-        server->Shutdown();
         auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(5);
-        server->Wait();
+        server->Shutdown(deadline);
         server = nullptr;
         SYSTEM_LOG_INFO("[IPCServer] shut down completely.");
     }
@@ -90,14 +79,15 @@ grpc::Status IPCServer::GetStunInfo(
     }
 
     // Call the callback to get STUN info
-    auto [publicIP, publicPort] = getStunInfoCallback();
+    StunInfo stunInfo = getStunInfoCallback();
 
-    if (!publicIP.empty() && publicPort > 0)
+    if (!stunInfo.publicIp.empty() && stunInfo.publicPort > 0 && stunInfo.publicKey.size() == crypto_box_PUBLICKEYBYTES)
     {
-        reply->set_public_ip(publicIP);
-        reply->set_public_port(publicPort);
+        reply->set_public_ip(stunInfo.publicIp);
+        reply->set_public_port(stunInfo.publicPort);
+        reply->set_public_key(stunInfo.publicKey.data(), stunInfo.publicKey.size());
         reply->set_error_message("");
-        SYSTEM_LOG_INFO("[IPCServer]: Returning STUN info - IP: {}, Port: {}", publicIP, publicPort);
+        SYSTEM_LOG_INFO("[IPCServer]: Returning STUN info - IP: {}, Port: {}, and public key", stunInfo.publicIp, stunInfo.publicPort);
         return grpc::Status::OK;
     }
     else
@@ -148,16 +138,6 @@ grpc::Status IPCServer::StartConnection(
 {
     SYSTEM_LOG_INFO("[IPCServer]: StartConnection called");
 
-    // Check if callback is set
-    if (!startConnectionCallback)
-    {
-        std::string errorMsg = "Start connection callback not set.";
-        reply->set_success(false);
-        reply->set_error_message(errorMsg);
-        SYSTEM_LOG_ERROR("[IPCServer]: Error: {}", errorMsg);
-        return grpc::Status(grpc::StatusCode::INTERNAL, errorMsg);
-    }
-
     // Check for testing failure flag
     if (request->should_fail())
     {
@@ -168,7 +148,6 @@ grpc::Status IPCServer::StartConnection(
         return grpc::Status::OK;
     }
 
-    // Convert peerInfo from repeated string to vector
     std::vector<std::string> peerInfo;
     for (int i = 0; i < request->peer_info_size(); i++)
     {
@@ -178,14 +157,13 @@ grpc::Status IPCServer::StartConnection(
     int self_index = request->self_index();
     SYSTEM_LOG_INFO("[IPCServer]: Self index: {}", self_index);
 
-    // Display peer info for testing
+    // TODO: Check for existance of self_index and that size of list is >= 2
     SYSTEM_LOG_INFO("[IPCServer]: Received peer info:");
     for (size_t i = 0; i < peerInfo.size(); i++)
     {
         SYSTEM_LOG_INFO("[IPCServer] {}: {}", i, peerInfo[i]);
     }
 
-    // Parse peer info
     NetworkConfigManager::SetupConfig setupConfig = networkConfigManager.getSetupConfig();
     auto peerMap = utils::parsePeerInfo(peerInfo, setupConfig.IP_SPACE, self_index);
 
@@ -233,17 +211,7 @@ grpc::Status IPCServer::StopConnection(
 {
     SYSTEM_LOG_INFO("[IPCServer]: StopConnection called");
 
-    // Check if callback is set
-    if (!stopConnectionCallback)
-    {
-        std::string errorMsg = "Stop connection callback not set.";
-        reply->set_success(false);
-        reply->set_message(errorMsg);
-        SYSTEM_LOG_ERROR("[IPCServer]: Error: {}", errorMsg);
-        return grpc::Status(grpc::StatusCode::INTERNAL, errorMsg);
-    }
-
-    // Call the callback to stop the connection
+    SYSTEM_LOG_INFO("[IPCServer]: Queueing disconnect all event");
     bool success = false;
     stateManager->queueEvent(NetworkEventData(NetworkEvent::DISCONNECT_ALL_REQUESTED));
     success = true;
@@ -268,12 +236,12 @@ grpc::Status IPCServer::GetConnectionStatus(
     const peerbridge::GetConnectionStatusRequest* request,
     peerbridge::GetConnectionStatusResponse* reply)
 {
-    // Empty implementation
+    // TODO: Implement this
     return grpc::Status::OK;
 }
 
 // Example RPC method implementation
-// grpc::Status IPCServer::YourMethod(
+// grpc::Status IPCServer::SomeEvent(
 //      grpc::ServerContext* context, 
 //      const peerbridge::RequestType* request, 
 //      peerbridge::ResponseType* reply)

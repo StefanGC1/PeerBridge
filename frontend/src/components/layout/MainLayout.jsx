@@ -31,12 +31,11 @@ function MainLayout() {
   return (
     <LobbyProvider>
       <div className="flex h-screen">
-        {/* Sidebar */}
         <div className="flex flex-col items-center bg-background dark:bg-card w-16 border-r border-border">
           <div className="flex flex-col items-center w-full flex-grow py-4">
             {/* Logo or app icon at the top */}
             <div className="mt-2 mb-6">
-              <img src="/src/assets/logo.svg" alt="Logo" className="w-8 h-8" />
+              <img src="/src/assets/logo.svg" alt="Logo" className="w-12 h-12" />
             </div>
             
             {/* Navigation Icons */}
@@ -82,13 +81,11 @@ function MainLayout() {
             </div>
           </div>
         </div>
-        
-        {/* Main content */}
+
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
-        
-        {/* Show lobby indicator if on a non-lobby page */}
+
         {location.pathname !== '/app/lobby' && <LobbyIndicator />}
       </div>
     </LobbyProvider>

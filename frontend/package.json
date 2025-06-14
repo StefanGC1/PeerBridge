@@ -45,6 +45,7 @@
   "build": {
     "appId": "com.scrisan.peerbridge",
     "productName": "PeerBridge",
+    "icon": "public/logo",
     "directories": {
       "output": "dist_electron"
     },
@@ -52,14 +53,17 @@
       "dist/**/*",
       "electron/**/*",
       "proto/**/*",
-      "cpp/**/*"
+      "cpp/**/*",
+      "public/**/*"
     ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PeerBridge"
+      "shortcutName": "PeerBridge",
+      "installerIcon": "public/logo.ico",
+      "installerHeaderIcon": "public/logo.ico"
     },
     "asarUnpack": [
       "cpp/**/*"
@@ -68,7 +72,8 @@
       "category": "public.app-category.utilities"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "public/logo.ico"
     },
     "linux": {
       "target": "deb"

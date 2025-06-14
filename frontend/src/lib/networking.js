@@ -1,10 +1,3 @@
-/**
- * Start a connection with peers using the C++ networking module
- * @param {string[]} peerInfo - Array of peer connection strings (ip:port)
- * @param {number} selfIndex - Index of self in the peer_info list
- * @param {boolean} shouldFail - Testing flag to simulate failure
- * @returns {Promise<{success: boolean, errorMessage: string}>} - Connection result
- */
 export const startConnectionWithPeers = async (peerInfo, selfIndex, shouldFail = false) => {
   try {
     if (!window.electron?.grpc?.startConnection) {

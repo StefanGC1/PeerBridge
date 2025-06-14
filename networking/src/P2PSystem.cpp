@@ -71,14 +71,12 @@ bool P2PSystem::startIPCServer(const std::string& serverAddress)
     if (!ipcServer)
     {
         ipcServer = std::make_unique<IPCServer>(stateManager, networkConfigManager);
-        
-        // Set up callbacks
-        ipcServer->setGetStunInfoCallback([this]() -> std::pair<std::string, int>
+
+        ipcServer->setGetStunInfoCallback([this]() -> IPCServer::StunInfo
         {
-            return {this->publicIp, this->publicPort};
+            return {this->publicIp, this->publicPort, this->publicKey};
         });
-        
-        // Add shutdown callback
+
         ipcServer->setShutdownCallback([this](bool force)
         {
             // Initiate process shutdown
@@ -86,30 +84,15 @@ bool P2PSystem::startIPCServer(const std::string& serverAddress)
             {
                 // Force immediate exit
                 SYSTEM_LOG_INFO("[System] Force shutdown requested, exiting immediately");
-                exit(0);
+                std::_Exit(0);
             } else
             {
                 // Graceful shutdown
                 SYSTEM_LOG_INFO("[System] Graceful shutdown requested");
                 
-                // Call our shutDown method instead of just changing running_
-                this->shutdown();
+                // Queue shutdown event
+                stateManager->queueEvent(NetworkEvent::SHUTDOWN_REQUESTED);
             }
-        });
-        
-        // Add start connection callback
-        ipcServer->setStartConnectionCallback([this](const std::vector<std::string>& peerInfo, int selfIndex) -> bool
-        {
-            // TO DO: IMPLEMENT FOR *1 OR REMOVE
-            return true;
-        });
-        
-        // Add stop connection callback
-        ipcServer->setStopConnectionCallback([this]() -> bool
-        {
-            // Disconnect from peers but keep the process running
-            // TO DO: IMPLEMENT FOR *1 OR REMOVE
-            return true;
         });
     }
     
@@ -219,7 +202,47 @@ bool P2PSystem::initialize(int localPort)
         SYSTEM_LOG_ERROR("[System] Failed to start UDP network");
         return false;
     }
-    
+
+    /*
+    *   ENCRYPTION SETUP
+    */
+
+    if (sodium_init() == -1)
+    {
+        SYSTEM_LOG_ERROR("[System] Failed to initialize libsodium encryption");
+        return false;
+    }
+
+    if (crypto_box_keypair(publicKey.data(), secretKey.data()) == -1)
+    {
+        SYSTEM_LOG_ERROR("[System] Failed to generate encryption keypair");
+        return false;
+    }
+    SYSTEM_LOG_INFO("[System] Encryption keypair generated");
+
+    SYSTEM_LOG_INFO("[System] Test printing first 5 bytes of public key:");
+    SYSTEM_LOG_INFO(
+        "[System] Public key (first 5): {:02X} {:02X} {:02X} {:02X} {:02X}",
+        static_cast<unsigned>(publicKey[0]),
+        static_cast<unsigned>(publicKey[1]),
+        static_cast<unsigned>(publicKey[2]),
+        static_cast<unsigned>(publicKey[3]),
+        static_cast<unsigned>(publicKey[4]));
+
+    // TODO: REMOVE
+    SYSTEM_LOG_INFO("[System] Test printing first 5 bytes of secret key:");
+    SYSTEM_LOG_INFO(
+        "[System] Secret key (first 5): {:02X} {:02X} {:02X} {:02X} {:02X}",
+        static_cast<unsigned>(secretKey[0]),
+        static_cast<unsigned>(secretKey[1]),
+        static_cast<unsigned>(secretKey[2]),
+        static_cast<unsigned>(secretKey[3]),
+        static_cast<unsigned>(secretKey[4]));
+
+    /*
+    *   MONITOR LOOP
+    */
+
     // Start monitoring loop
     monitorThread = std::thread([this]()
     {
@@ -317,8 +340,11 @@ void P2PSystem::handleNetworkEvent(const NetworkEventData& event)
 
         case NetworkEvent::SHUTDOWN_REQUESTED:
         {
-            SYSTEM_LOG_INFO("[SYSTEM] Received shutdown requested event");
-            shutdown();
+            if (currentState != SystemState::SHUTTING_DOWN)
+            {
+                SYSTEM_LOG_INFO("[SYSTEM] Received shutdown requested event");
+                shutdown();
+            }
             break;
         }
     }
@@ -432,48 +458,67 @@ void P2PSystem::stopConnection()
 // Full system shutdown
 void P2PSystem::shutdown()
 {
+    if (!running)
+    {
+        SYSTEM_LOG_WARNING("[System] System is already shutting down");
+        return;
+    }
+
+    stateManager->setState(SystemState::SHUTTING_DOWN);
+
     // First stop any active connections
     if (networkModule)
     {
         boost::asio::post(networkModule->getIOContext(), [this]()
         {
-            networkModule->stopConnection();
+            networkModule->shutdown();
         });
     }
-    // Stop the network interface
-    stopNetworkInterface();
 
-    // Update system state
-    running = false;
-    stateManager->setState(SystemState::SHUTTING_DOWN);
-    
+    // Give the IOThread time to stop
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
     // Stop the network interface
     stopNetworkInterface();
-    tunInterface->close();
-    
-    // Stop the network
-    if (networkModule)
-    {
-        networkModule->shutdown();
-    }
     
     // Close the TUN interface
     if (tunInterface)
     {
         tunInterface->close();
     }
-    
+
     // Stop the IPC Server and thread
     stopIPCServer();
-    if (ipcServerThread.joinable())
-    {
-        ipcServerThread.join();
-    }
 
+    // Stop main thread sleep
+    running = false;
+    
+    SYSTEM_LOG_INFO("[System] System shut down successfully");
+}
+
+void P2PSystem::cleanup()
+{
+    if (running)
+    {
+        SYSTEM_LOG_WARNING("[System] System is still running, cannot initiate cleanup");
+        return;
+    }
+    
+    SYSTEM_LOG_INFO("[System] Cleaning up resources, stopping monitor thread");
     if (monitorThread.joinable())
     {
         monitorThread.join();
     }
-    
-    SYSTEM_LOG_INFO("[System] System shut down successfully");
+}
+
+// A bit of a bandaid fix :)
+bool P2PSystem::isRunning() const
+{
+    return running;
+}
+
+// A bit of a bandaid fix :)
+void P2PSystem::setRunningFalse()
+{
+    running = false;
 }

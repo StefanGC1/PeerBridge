@@ -3,7 +3,7 @@ import axiosInstance from "./axios";
 export async function login(username, password) {
   try {
     // Get STUN info before login
-    let stunInfo = { publicIp: '', publicPort: 0 };
+    let stunInfo = { publicIp: '', publicPort: 0, publicKey: [] };
     try {
       stunInfo = await window.electron.grpc.getStunInfo();
       console.log('Got STUN info:', stunInfo);
@@ -12,12 +12,14 @@ export async function login(username, password) {
       // Continue with login even if STUN info fails
     }
     
-    // Add STUN info to login request
+    // Add STUN info
+    const publicKeyArray = Array.from(stunInfo.publicKey);
     const response = await axiosInstance.post("/api/login", {
       username, 
       password,
       public_ip: stunInfo.publicIp || '',
-      public_port: stunInfo.publicPort || 0
+      public_port: stunInfo.publicPort || 0,
+      public_key: publicKeyArray || []
     });
     
     console.log('Login response:', response);
@@ -28,22 +30,34 @@ export async function login(username, password) {
   }
 }
 
-export async function register(email, password) {
-//   const response = await fetch('/api/auth/login', {
-//     method: 'POST',
-//     headers: {
-//       'Content-Type': 'application/json',
-//     },
-//     body: JSON.stringify({ email, password }),
-//   });
-
-//   if (!response.ok) {
-//     throw new Error('Login failed');
-//   }
-
-//   const data = await response.json();
-  const data = "mockedUserData";
-  return data;
+export async function register(username, password) {
+  try {
+    // Get STUN info before registration
+    let stunInfo = { publicIp: '', publicPort: 0, publicKey: [] };
+    try {
+      stunInfo = await window.electron.grpc.getStunInfo();
+      console.log('Got STUN info:', stunInfo);
+    } catch (stunError) {
+      console.warn('Failed to get STUN info:', stunError);
+      // Continue with registration even if STUN info fails
+    }
+    
+    // Add STUN info
+    const publicKeyArray = Array.from(stunInfo.publicKey);
+    const response = await axiosInstance.post("/api/register", {
+      username, 
+      password,
+      public_ip: stunInfo.publicIp || '',
+      public_port: stunInfo.publicPort || 0,
+      public_key: publicKeyArray || []
+    });
+    
+    console.log('Register response:', response);
+    return response.data;
+  } catch (error) {
+    console.warn('Error registering:', error);
+    throw error;
+  }
 }
 
 export async function getActiveServers() {
