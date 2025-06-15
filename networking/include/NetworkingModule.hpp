@@ -54,6 +54,14 @@ private:
 class UDPNetwork : public IUDPNetwork
 {
 public:
+    // Packet types
+    enum class PacketType : uint8_t {
+        HOLE_PUNCH = 0x01,
+        HEARTBEAT = 0x02,
+        MESSAGE = 0x03,
+        ACK = 0x04,
+        DISCONNECT = 0x05
+    };
     
     UDPNetwork(
         std::unique_ptr<boost::asio::ip::udp::socket>,
@@ -91,14 +99,6 @@ public:
     boost::asio::io_context& getIOContext() override;
 
 private:
-     // Packet types
-    enum class PacketType : uint8_t {
-        HOLE_PUNCH = 0x01,
-        HEARTBEAT = 0x02,
-        MESSAGE = 0x03,
-        ACK = 0x04,
-        DISCONNECT = 0x05
-    };
 
     // Async operations, receiving from peer, sending to TUNInterface
     void startAsyncReceive();
@@ -171,4 +171,21 @@ private:
     
     // Callbacks
     MessageCallback onMessageCallback;
+
+
+    /* ====================================================================================================== */
+public:
+    // Testing helpers
+    #ifdef PB_UNIT_TESTING
+    uint32_t testAttachHeader(
+        const std::shared_ptr<std::vector<uint8_t>>& sp,
+        PacketType t,
+        std::optional<uint32_t> seq = std::nullopt)
+    {
+        return attachCustomHeader(sp, t, seq);
+    }
+
+    const auto& testVirtualToPublic() const { return virtualIpToPublicIp; }
+    const auto& testPublicToPeer()   const { return publicIpToPeerConnection; }
+    #endif
 };

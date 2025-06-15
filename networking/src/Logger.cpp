@@ -4,6 +4,7 @@
 #include <regex>
 #include <quill/Backend.h>
 #include <quill/Frontend.h>
+#include <quill/sinks/NullSink.h>
 #include <quill/sinks/ConsoleSink.h>
 #include <quill/sinks/FileSink.h>
 #include <quill/sinks/RotatingFileSink.h>
@@ -185,11 +186,12 @@ void initTestLogging()
     cfg.sleep_duration = std::chrono::milliseconds{1};
     Backend::start(cfg);
 
-    auto console = Frontend::create_or_get_sink<ConsoleSink>(
-        "test_console", dimConsoleColours());
+    // auto console = Frontend::create_or_get_sink<ConsoleSink>(
+    //     "test_console", dimConsoleColours());
+    auto nullSink = Frontend::create_or_get_sink<NullSink>("null");
 
-    sysLogObject = Frontend::create_or_get_logger("app", console, shortLogFormat());
-    netLogObject = Frontend::create_or_get_logger("net", console, shortLogFormat());
+    sysLogObject = Frontend::create_or_get_logger("app", nullSink, shortLogFormat());
+    netLogObject = Frontend::create_or_get_logger("net", nullSink, shortLogFormat());
 }
 
 quill::Logger* sysLogger() { return sysLogObject; }

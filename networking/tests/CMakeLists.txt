@@ -4,8 +4,10 @@ cmake_minimum_required(VERSION 3.10)
 # Test executable
 add_executable(PeerBridgeNet_tests
     gtest_main.cpp
-    P2PSystem_test.cpp
+    PeerConnectionInfo_test.cpp
     SystemStateManager_test.cpp
+    UDPNetwork_test.cpp
+    P2PSystem_test.cpp
 )
 
 # Include directories for tests

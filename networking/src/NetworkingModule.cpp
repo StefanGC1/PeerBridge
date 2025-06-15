@@ -168,17 +168,10 @@ bool UDPNetwork::startConnection(
         }
     }
 
-    // construct virtualIpToPublicIp
-    std::map<uint32_t, std::pair<std::uint32_t, int>> _virtualIpToPublicIp;
-    for (const auto& [virtualIp, publicIpAndPortAndKey] : virtualIpToPublicIpPortAndKey)
-    {
-        _virtualIpToPublicIp[virtualIp] = publicIpAndPortAndKey.first;
-    }
-
     selfVirtualIp = selfIp;
-    virtualIpToPublicIp = _virtualIpToPublicIp;
 
-    // construct publicIpToPeerConnection
+    // construct virtualIpToPublicIp and publicIpToPeerConnection
+    std::map<uint32_t, std::pair<std::uint32_t, int>> _virtualIpToPublicIp;
     for (const auto& [virtualIp, publicIpPortAndKey] : virtualIpToPublicIpPortAndKey)
     {
         uint32_t publicIp = publicIpPortAndKey.first.first;
@@ -194,7 +187,7 @@ bool UDPNetwork::startConnection(
             SYSTEM_LOG_ERROR("[Network] Failed to construct shared key for peer {}", utils::uint32ToIp(publicIp));
             continue;
         }
-
+        _virtualIpToPublicIp[virtualIp] = publicIpPortAndKey.first;
         publicIpToPeerConnection[publicIp] = PeerConnectionInfo(peerEndpoint, sharedKey);
 
         SYSTEM_LOG_INFO(
@@ -206,6 +199,7 @@ bool UDPNetwork::startConnection(
             static_cast<unsigned>(sharedKey[3]),
             static_cast<unsigned>(sharedKey[4]));
     }
+    virtualIpToPublicIp = _virtualIpToPublicIp;
 
     // Start hole punching process
     startHolePunchingProcess();
@@ -976,6 +970,7 @@ void UDPNetwork::handleKeepAlive(const boost::system::error_code& error)
     startKeepAliveTimer(); // Restart timer
 }
 
+// ! EXPECTS AN EMPTY PACKET / SPACE FOR THE HEADER
 uint32_t UDPNetwork::attachCustomHeader(
     const std::shared_ptr<std::vector<uint8_t>>& packet,
     PacketType packetType,
@@ -997,6 +992,7 @@ uint32_t UDPNetwork::attachCustomHeader(
     
     // Set packet type
     (*packet)[6] = static_cast<uint8_t>(packetType);
+    (*packet)[7] = 0;
     
     // Set sequence number
     uint32_t seq = seqOpt.value_or(nextSeqNumber++);
