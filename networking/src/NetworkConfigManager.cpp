@@ -4,15 +4,6 @@
 
 #pragma comment(lib, "iphlpapi.lib")
 
-NetworkConfigManager::SetupConfig NetworkConfigManager::SetupConfig::loadConfig()
-{
-    // TODO: Later, set GUID here and send it to tun->initialize
-    SetupConfig cfg{
-        "10.0.0.",  // IP-SPACE
-        {}};        // GUID
-    return cfg;
-}
-
 NetworkConfigManager::NetworkConfigManager() : setupConfig{SetupConfig::loadConfig()}
 {}
 

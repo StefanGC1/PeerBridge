@@ -58,6 +58,7 @@ P2PSystem::P2PSystem()
     , peerPort(0)
 {
     stateManager = std::make_shared<SystemStateManager>();
+    networkConfigManager = std::make_shared<NetworkConfigManager>();
 }
 
 P2PSystem::~P2PSystem()
@@ -69,32 +70,30 @@ bool P2PSystem::startIPCServer(const std::string& serverAddress)
 {
     // Create IPC server if it doesn't exist
     if (!ipcServer)
-    {
         ipcServer = std::make_unique<IPCServer>(stateManager, networkConfigManager);
 
-        ipcServer->setGetStunInfoCallback([this]() -> IPCServer::StunInfo
-        {
-            return {this->publicIp, this->publicPort, this->publicKey};
-        });
+    ipcServer->setGetStunInfoCallback([this]() -> IPCServer::StunInfo
+    {
+        return {this->publicIp, this->publicPort, this->publicKey};
+    });
 
-        ipcServer->setShutdownCallback([this](bool force)
+    ipcServer->setShutdownCallback([this](bool force)
+    {
+        // Initiate process shutdown
+        if (force)
         {
-            // Initiate process shutdown
-            if (force)
-            {
-                // Force immediate exit
-                SYSTEM_LOG_INFO("[System] Force shutdown requested, exiting immediately");
-                std::_Exit(0);
-            } else
-            {
-                // Graceful shutdown
-                SYSTEM_LOG_INFO("[System] Graceful shutdown requested");
-                
-                // Queue shutdown event
-                stateManager->queueEvent(NetworkEvent::SHUTDOWN_REQUESTED);
-            }
-        });
-    }
+            // Force immediate exit
+            SYSTEM_LOG_INFO("[System] Force shutdown requested, exiting immediately");
+            std::_Exit(0);
+        } else
+        {
+            // Graceful shutdown
+            SYSTEM_LOG_INFO("[System] Graceful shutdown requested");
+            
+            // Queue shutdown event
+            stateManager->queueEvent(NetworkEvent::SHUTDOWN_REQUESTED);
+        }
+    });
     
     // Run the server in a separate thread
     ipcServerThread = std::thread([this, serverAddress]()
@@ -160,7 +159,8 @@ bool P2PSystem::initialize(int localPort)
     */
 
     // Initialize TUN interface
-    tunInterface = std::make_unique<TunInterface>();
+    if (!tunInterface)
+        tunInterface = std::make_unique<TunInterface>();
     if (!tunInterface->initialize("PeerBridge"))
     {
         SYSTEM_LOG_ERROR("[System] Failed to initialize TUN interface");
@@ -176,18 +176,19 @@ bool P2PSystem::initialize(int localPort)
         });
     });
 
-    networkConfigManager.setNarrowAlias(tunInterface->getNarrowAlias());
+    networkConfigManager->setNarrowAlias(tunInterface->getNarrowAlias());
 
     /*
     *   NETWORK MODULE SETUP
     */
 
     // Create networking class, using the socket from STUN to preserve NAT binding
-    networkModule = std::make_unique<UDPNetwork>(
-        std::move(stunService.getSocket()),
-        stunService.getContext(),
-        stateManager,
-        networkConfigManager);
+    if (!networkModule)
+        networkModule = std::make_unique<UDPNetwork>(
+            std::move(stunService->getSocket()),
+            stunService->getContext(),
+            stateManager,
+            networkConfigManager);
     
     // Set up network callbacks for P2P connection
     networkModule->setMessageCallback([this](std::vector<uint8_t> packet)
@@ -363,7 +364,7 @@ void P2PSystem::initializeConnectionData(
     }
 
     uint32_t selfIp = utils::ipToUint32(
-        networkConfigManager.getSetupConfig().IP_SPACE + std::to_string(selfIndex + 1));
+        networkConfigManager->getSetupConfig().IP_SPACE + std::to_string(selfIndex + 1));
     currentConnectionConfig = {
         .selfVirtualIp = utils::uint32ToIp(selfIp),
         .peerVirtualIps = configVirtualPeerIps
@@ -380,7 +381,11 @@ void P2PSystem::initializeConnectionData(
 
 bool P2PSystem::discoverPublicAddress()
 {
-    auto publicAddr = stunService.discoverPublicAddress();
+    if (!stunService)
+        stunService = std::make_unique<StunClient>();
+    
+    stunService->setStunServer("stun.l.google.com", "19302");
+    auto publicAddr = stunService->discoverPublicAddress();
     if (!publicAddr)
     {
         SYSTEM_LOG_ERROR("[System] Failed to discover public address via STUN");
@@ -403,7 +408,7 @@ bool P2PSystem::startNetworkInterface()
         return false;
     }
 
-    networkConfigManager.configureInterface(currentConnectionConfig);
+    networkConfigManager->configureInterface(currentConnectionConfig);
 
     // Start packet processing
     if (!tunInterface->startPacketProcessing()) {
@@ -429,7 +434,7 @@ void P2PSystem::stopNetworkInterface()
     if (tunInterface && tunInterface->isRunning())
     {
         tunInterface->stopPacketProcessing();
-        networkConfigManager.resetInterfaceConfiguration(currentConnectionConfig.peerVirtualIps);
+        networkConfigManager->resetInterfaceConfiguration(currentConnectionConfig.peerVirtualIps);
         currentConnectionConfig = {};
         SYSTEM_LOG_INFO("[System] Network interface stopped and configuration reset");
     }

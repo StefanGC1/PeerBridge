@@ -1,0 +1,16 @@
+# Simple build
+
+cmake .. -G "MinGW Makefiles" -DENABLE_DEP_COPY=ON
+
+mingw32-make
+
+cpack # If necessary
+
+
+# Test build
+
+cmake .. -G "MinGW Makefiles" -DENABLE_DEP_COPY=ON -DBUILD_TESTS=ON
+
+mingw32-make
+
+ctest verbose

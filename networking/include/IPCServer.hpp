@@ -2,35 +2,27 @@
 
 #include "SystemStateManager.hpp"
 #include "NetworkConfigManager.hpp"
+#include "interfaces/IIPCServer.hpp"
 #include <grpcpp/grpcpp.h>
 #include "peerbridge.grpc.pb.h"
 #include <functional>
 #include <string>
 #include <sodium.h>
 
-class IPCServer final : public peerbridge::PeerBridgeService::Service {
+class IPCServer final : public peerbridge::PeerBridgeService::Service, public IIPCServer
+{
 public:
-    struct StunInfo
-    {
-        std::string publicIp;
-        int publicPort;
-        std::array<uint8_t, crypto_box_PUBLICKEYBYTES>& publicKey;
-    };
-    // Define callback types
-    using GetStunInfoCallback = std::function<StunInfo()>;
-    using ShutdownCallback = std::function<void(bool)>;
-
     IPCServer(
-        std::shared_ptr<SystemStateManager>,
-        NetworkConfigManager&);
+        std::shared_ptr<ISystemStateManager>,
+        std::shared_ptr<INetworkConfigManager>);
     ~IPCServer();
 
-    void RunServer(const std::string&);
-    void ShutdownServer();
+    void RunServer(const std::string&) override;
+    void ShutdownServer() override;
 
     // Callback setters
-    void setGetStunInfoCallback(GetStunInfoCallback);
-    void setShutdownCallback(ShutdownCallback);
+    void setGetStunInfoCallback(GetStunInfoCallback) override;
+    void setShutdownCallback(ShutdownCallback) override;
 
     // RPC method implementation for GetStunInfo
     grpc::Status GetStunInfo(
@@ -65,8 +57,8 @@ public:
 private:
     std::unique_ptr<grpc::Server> server;
 
-    std::shared_ptr<SystemStateManager> stateManager;
-    NetworkConfigManager& networkConfigManager;
+    std::shared_ptr<ISystemStateManager> stateManager;
+    std::shared_ptr<INetworkConfigManager> networkConfigManager;
 
     // Callbacks
     GetStunInfoCallback getStunInfoCallback;

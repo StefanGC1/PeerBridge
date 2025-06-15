@@ -1,8 +1,7 @@
 #pragma once
 #include "SystemStateManager.hpp"
 #include "NetworkConfigManager.hpp"
-#include <string>
-#include <functional>
+#include "interfaces/INetworkModule.hpp"
 #include <memory>
 #include <atomic>
 #include <thread>
@@ -10,49 +9,86 @@
 #include <queue>
 #include <chrono>
 #include <optional>
-#include <unordered_map>
 #include <boost/asio.hpp>
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/steady_timer.hpp>
 
-class UDPNetwork {
+// Helper class for peer connection information
+class PeerConnectionInfo
+{
 public:
-    using MessageCallback = std::function<void(const std::vector<uint8_t>)>;
+    using SharedKey = std::array<uint8_t, crypto_box_BEFORENMBYTES>;
+
+    PeerConnectionInfo();
+    PeerConnectionInfo(const boost::asio::ip::udp::endpoint&);
+    PeerConnectionInfo(const boost::asio::ip::udp::endpoint&, const PeerConnectionInfo::SharedKey&);
+    
+    // Last active time (receive timestamp)
+    void updateActivity();
+    bool hasTimedOut(int = 10) const;
+    
+    // Connection state
+    void setConnected(bool);
+    bool isConnected() const;
+
+    // Access peer endpoint
+    boost::asio::ip::udp::endpoint getPeerEndpoint() const;
+    
+    // Access last activity time for monitoring
+    std::chrono::steady_clock::time_point getLastActivity() const;
+    
+    // Access shared key for encryption
+    const SharedKey& getSharedKey() const;
+    
+private:
+    std::chrono::steady_clock::time_point lastActivity;
+    bool connected;
+    boost::asio::ip::udp::endpoint peerEndpoint;
+    SharedKey sharedKey;
+};
+
+
+/* ====================================================================================================== */
+
+
+class UDPNetwork : public IUDPNetwork
+{
+public:
     
     UDPNetwork(
         std::unique_ptr<boost::asio::ip::udp::socket>,
         boost::asio::io_context&,
-        std::shared_ptr<SystemStateManager>,
-        NetworkConfigManager&);
+        std::shared_ptr<ISystemStateManager>,
+        std::shared_ptr<INetworkConfigManager>);
     ~UDPNetwork();
     
     // Setup and connection
-    bool startListening(int port);
+    bool startListening(int port) override;
     bool startConnection(
         uint32_t,
         const std::array<uint8_t, crypto_box_SECRETKEYBYTES>&,
-        std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>>);
+        std::map<uint32_t, std::pair<std::pair<std::uint32_t, int>, std::array<uint8_t, crypto_box_PUBLICKEYBYTES>>>) override;
     
     // Disconnet and shutdown
-    void stopConnection();
-    void shutdown();
+    void stopConnection() override;
+    void shutdown() override;
     
-    bool isConnected() const;
+    bool isConnected() const override;
     
     // Async operations, sending to peer, queued by TUNInterface
-    void processPacketFromTun(const std::vector<uint8_t>&);
+    void processPacketFromTun(const std::vector<uint8_t>&) override;
     bool sendMessage(
         const std::vector<uint8_t>& data,
         const boost::asio::ip::udp::endpoint& peerEndpoint,
-        const std::array<uint8_t, crypto_box_BEFORENMBYTES>& sharedKey);
-    void setMessageCallback(MessageCallback callback);
+        const std::array<uint8_t, crypto_box_BEFORENMBYTES>& sharedKey) override;
+    void setMessageCallback(MessageCallback callback) override;
     
     // Get local information
-    int getLocalPort() const;
-    std::string getLocalAddress() const;
+    // int getLocalPort() const;
+    // std::string getLocalAddress() const;
 
     // External handle to IOContext
-    boost::asio::io_context& getIOContext();
+    boost::asio::io_context& getIOContext() override;
 
 private:
      // Packet types
@@ -105,7 +141,7 @@ private:
         std::optional<uint32_t> = std::nullopt);
     
     // Constants
-    static constexpr size_t MAX_PACKET_SIZE = 65507; // Max UDP packet size
+    static constexpr size_t MAX_PACKET_SIZE = 65507;
     static constexpr uint16_t PROTOCOL_VERSION = 1;
     static constexpr uint32_t MAGIC_NUMBER = 0x12345678;
 
@@ -128,20 +164,10 @@ private:
     std::map<uint32_t, std::pair<std::uint32_t, int>> virtualIpToPublicIp;
     std::map<uint32_t, PeerConnectionInfo> publicIpToPeerConnection;
     uint32_t selfVirtualIp;
-
-    // TODO: REMOVE
-    boost::asio::ip::udp::endpoint peerEndpoint;
-    PeerConnectionInfo peerConnection;
-    // TODO: FOR *1, SEE HOW THIS WILL CHANGE FOR MULTIPLE PEERS
-    std::string currentPeerEndpoint;
-
-    // TODO: FOR *1, USE MAP, maybe from std::endpoint to PeerConnectionInfo?
-    // Maybe fromm std::string to PeerConnectionInfo?
-    // Maybe PeerConnectionInfo holds endpoint or string?
     
     // State manager for event queuing
-    std::shared_ptr<SystemStateManager> stateManager;
-    NetworkConfigManager& networkConfigManager;
+    std::shared_ptr<ISystemStateManager> stateManager;
+    std::shared_ptr<INetworkConfigManager> networkConfigManager;
     
     // Callbacks
     MessageCallback onMessageCallback;

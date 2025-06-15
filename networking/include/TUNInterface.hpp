@@ -1,17 +1,14 @@
 #pragma once
 
-#include <string>
+#include "interfaces/ITunInterface.hpp"
 #include <Windows.h>
 #include <wintun.h>
-#include <functional>
 #include <thread>
 #include <atomic>
 #include <memory>
-#include <vector>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
-#include <boost/asio.hpp>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,36 +23,29 @@ BOOL WINAPI WintunGetAdapterLUID(_In_ WINTUN_ADAPTER_HANDLE Adapter, _Out_ NET_L
 }
 #endif
 
-class TunInterface {
+class TunInterface : public ITunInterface
+{
 public:
     TunInterface();
     ~TunInterface();
 
-    // Callback types
-    using PacketCallback = std::function<void(const std::vector<uint8_t>&)>;
+    bool initialize(const std::string&) override;
 
-    // Initialize TUN adapter with a device name
-    bool initialize(const std::string&);
-
-    // Start and stop packet processing
-    bool startPacketProcessing();
-    void stopPacketProcessing();
+    bool startPacketProcessing() override;
+    void stopPacketProcessing() override;
 
     // Add a packet to injection queue
-    bool sendPacket(std::vector<uint8_t>);
+    bool sendPacket(std::vector<uint8_t>) override;
 
-    // Set callback for extracted packets
-    void setPacketCallback(PacketCallback callback);
+    void setPacketCallback(PacketCallback callback) override;
 
-    // Check if the interface is running
-    bool isRunning() const;
+    bool isRunning() const override;
 
-    // Close and clean up the TUN interface
-    void close();
+    void close() override;
 
     // Getter for adapter alias
     // We use this to make sure we get the exact name of the adapter
-    std::string getNarrowAlias() const;
+    std::string getNarrowAlias() const override;
 
 private:
     // Wintun session and adapter

@@ -4,12 +4,23 @@ project(PeerBridgeNet)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Add test options
+option(BUILD_TESTS "Build the tests" ON)
+
 find_package(Boost REQUIRED COMPONENTS system filesystem thread stacktrace_windbg)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(GRPC REQUIRED grpc++ grpc)
 pkg_check_modules(PROTOBUF REQUIRED protobuf)
 pkg_check_modules(QUILL REQUIRED quill)
+
+# Add GTest for testing
+if(BUILD_TESTS)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTEST REQUIRED gtest)
+    pkg_check_modules(GMOCK REQUIRED gmock)
+    enable_testing()
+endif()
 
 # Find protoc and grpc_cpp_plugin
 find_program(PROTOC_EXECUTABLE NAMES protoc HINTS ENV Protobuf_ROOT PATHS ENV PATH ${PROTOBUF_PREFIX}/bin)
@@ -79,10 +90,8 @@ message(STATUS "Generated Proto sources: ${GENERATED_PROTO_SRCS}")
 
 include_directories(${WINTUN_INCLUDE_DIR})
 
-# Project source and header files
-include_directories("${CMAKE_SOURCE_DIR}/include")
-set(SOURCES
-    src/main.cpp
+# Create a library with all the core functionality (excluding main.cpp)
+set(LIB_SOURCES
     src/NetworkingModule.cpp
     src/Stun.cpp
     src/P2PSystem.cpp
@@ -93,10 +102,44 @@ set(SOURCES
     src/IPCServer.cpp
 )
 
-set(PROTO_SOURCES ${GENERATED_PROTO_SRCS}) # Add the generated .pb.cc and .grpc.pb.cc files
+set(PROTO_SOURCES ${GENERATED_PROTO_SRCS})
 
-# Create executable
-add_executable(PeerBridgeNet ${SOURCES} ${PROTO_SOURCES})
+# Create the library
+add_library(PeerBridgeNetLib STATIC ${LIB_SOURCES} ${PROTO_SOURCES})
+
+# Include directories for the library
+target_include_directories(PeerBridgeNetLib PUBLIC
+    "${CMAKE_SOURCE_DIR}/include"
+    ${Boost_INCLUDE_DIRS}
+    ${LIBSODIUM_INCLUDE_DIRS}
+    ${PROTOBUF_INCLUDE_DIRS}
+    ${GRPC_INCLUDE_DIRS}
+    ${GENERATED_PROTO_DIR}
+    ${WINTUN_INCLUDE_DIR}
+)
+
+# Link libraries for the library
+target_link_libraries(PeerBridgeNetLib PUBLIC
+    ${Boost_LIBRARIES}
+    Boost::stacktrace_windbg
+    dbghelp
+    ${LIBSODIUM_LIBRARIES}
+    ${GRPC_LIBRARIES}
+    ${PROTOBUF_LIBRARIES}
+    ws2_32
+    mswsock
+    crypt32
+    iphlpapi
+)
+
+target_compile_definitions(PeerBridgeNetLib PUBLIC 
+    IXWEBSOCKET_USE_TLS
+    SOURCE_ROOT_DIR="${CMAKE_SOURCE_DIR}/src/"
+)
+
+# Create executable using the library
+add_executable(PeerBridgeNet src/main.cpp)
+target_link_libraries(PeerBridgeNet PRIVATE PeerBridgeNetLib)
 
 # Setting elevation as required, this is only possible on windows
 # TODO: Add handling for Linux
@@ -106,30 +149,7 @@ set(ADMIN_RC "${CMAKE_CURRENT_BINARY_DIR}/peerbridge_manifest.rc")
 file(WRITE ${ADMIN_RC} "1 24 \"${ADMIN_MANIFEST}\"\n")
 target_sources(PeerBridgeNet PRIVATE ${ADMIN_RC})
 
-# Include directories
-target_include_directories(PeerBridgeNet PRIVATE
-    ${Boost_INCLUDE_DIRS}
-    ${LIBSODIUM_INCLUDE_DIRS}
-    ${PROTOBUF_INCLUDE_DIRS}  # From pkg_check_modules
-    ${GRPC_INCLUDE_DIRS}      # From pkg_check_modules
-    ${GENERATED_PROTO_DIR}    
-)
-
-# target_include_directories(PeerBridgeNet PRIVATE ${GENERATED_PROTO_DIR})# Add directory of generated headers to include path
-
-# Link libraries
-target_link_libraries(PeerBridgeNet PRIVATE
-    ${Boost_LIBRARIES}
-    Boost::stacktrace_windbg
-    dbghelp
-    ${LIBSODIUM_LIBRARIES}
-    ${GRPC_LIBRARIES}         # From pkg_check_modules
-    ${PROTOBUF_LIBRARIES}     # From pkg_check_modules
-    ws2_32
-    mswsock
-    crypt32
-    iphlpapi
-)
+# All dependencies are now handled by the library
 
 # Copy Wintun driver dll to build dir
 add_custom_command(TARGET PeerBridgeNet POST_BUILD
@@ -137,9 +157,6 @@ add_custom_command(TARGET PeerBridgeNet POST_BUILD
             "${WINTUN_DLL_DIR}/wintun.dll"
             $<TARGET_FILE_DIR:PeerBridgeNet>
     )
-
-target_compile_definitions(PeerBridgeNet PRIVATE IXWEBSOCKET_USE_TLS)
-target_compile_definitions(PeerBridgeNet PRIVATE SOURCE_ROOT_DIR="${CMAKE_SOURCE_DIR}/src/")
 
 #### POST-BUILD PACKAGING ####
 
@@ -169,4 +186,9 @@ if(ENABLE_DEP_COPY)
     set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
     set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/package")
     include(CPack)
+endif()
+
+# Add tests subdirectory
+if(BUILD_TESTS)
+    add_subdirectory(tests)
 endif()

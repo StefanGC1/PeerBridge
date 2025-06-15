@@ -7,17 +7,82 @@
 #include <cstring>
 #include <boost/asio/ip/address_v6.hpp>
 
+// Not used anymore
+PeerConnectionInfo::PeerConnectionInfo() : connected(false)
+{
+    updateActivity();
+}
+
+// Not used anymore
+PeerConnectionInfo::PeerConnectionInfo(const boost::asio::ip::udp::endpoint& endpoint) : connected(false)
+{
+    peerEndpoint = endpoint;
+    updateActivity();
+}
+
+PeerConnectionInfo::PeerConnectionInfo(
+    const boost::asio::ip::udp::endpoint& endpoint,
+    const PeerConnectionInfo::SharedKey& sharedKey) : connected(false)
+{
+    peerEndpoint = endpoint;
+    this->sharedKey = sharedKey;
+    updateActivity();
+}
+
+void PeerConnectionInfo::updateActivity()
+{
+    lastActivity = std::chrono::steady_clock::now();
+}
+
+bool PeerConnectionInfo::hasTimedOut(int timeoutSeconds) const
+{
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity).count();
+    return (elapsed > timeoutSeconds) && connected;
+}
+
+void PeerConnectionInfo::setConnected(bool connected_)
+{
+    connected = connected_;
+    if (connected_)
+    {
+        updateActivity();
+    }
+}
+
+bool PeerConnectionInfo::isConnected() const {
+    return connected;
+}
+
+std::chrono::steady_clock::time_point PeerConnectionInfo::getLastActivity() const {
+    return lastActivity;
+}
+
+boost::asio::ip::udp::endpoint PeerConnectionInfo::getPeerEndpoint() const
+{
+    return peerEndpoint;
+}
+
+const PeerConnectionInfo::SharedKey& PeerConnectionInfo::getSharedKey() const
+{
+    return sharedKey;
+}
+
+
+/* ====================================================================================================== */
+
+
 UDPNetwork::UDPNetwork(
     std::unique_ptr<boost::asio::ip::udp::socket> socket,
     boost::asio::io_context& context,
-    std::shared_ptr<SystemStateManager> state_manager,
-    NetworkConfigManager& networkConfigManager) 
+    std::shared_ptr<ISystemStateManager> stateManager,
+    std::shared_ptr<INetworkConfigManager> networkConfigManager) 
     : running(false)
     , localPort(0)
     , nextSeqNumber(0)
     , socket(std::move(socket))
     , ioContext(context)
-    , stateManager(state_manager)
+    , stateManager(stateManager)
     , networkConfigManager(networkConfigManager)
     , keepAliveTimer(ioContext)
 {
@@ -281,7 +346,7 @@ void UDPNetwork::processPacketFromTun(const std::vector<uint8_t>& packet)
     uint32_t dstIp = (packet[16] << 24) | (packet[17] << 16) | (packet[18] << 8) | packet[19];
 
     // Forward packets that are meant for peer OR are broadcast/multicast packets
-    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager.getSetupConfig().IP_SPACE + std::to_string(255));
+    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager->getSetupConfig().IP_SPACE + std::to_string(255));
 
     const auto& virtualIpMapIter = virtualIpToPublicIp.find(dstIp);
     bool isForPeer = (virtualIpMapIter != virtualIpToPublicIp.end());
@@ -456,15 +521,15 @@ void UDPNetwork::setMessageCallback(MessageCallback callback)
     onMessageCallback = std::move(callback);
 }
 
-int UDPNetwork::getLocalPort() const
-{
-    return localPort;
-}
+// int UDPNetwork::getLocalPort() const
+// {
+//     return localPort;
+// }
 
-std::string UDPNetwork::getLocalAddress() const
-{
-    return localAddress;
-}
+// std::string UDPNetwork::getLocalAddress() const
+// {
+//     return localAddress;
+// }
 
 void UDPNetwork::startAsyncReceive()
 {
@@ -701,7 +766,7 @@ void UDPNetwork::deliverPacketToTun(const std::vector<uint8_t> packet)
     uint32_t dstIp = (packet[16] << 24) | (packet[17] << 16) | (packet[18] << 8) | packet[19];
 
     // Only deliver packets that are meant for us OR are broadcast/multicast packets
-    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager.getSetupConfig().IP_SPACE + std::to_string(255));
+    uint32_t BROADCAST_IP = utils::ipToUint32(networkConfigManager->getSetupConfig().IP_SPACE + std::to_string(255));
 
     bool isForUs = (dstIp == selfVirtualIp);
     bool isBroadcast = (dstIp == BROADCAST_IP) || (dstIp == NetworkConstants::BROADCAST_IP2);
@@ -761,7 +826,18 @@ void UDPNetwork::sendDisconnectNotification(const boost::asio::ip::udp::endpoint
 {
     try
     {
-        if (!peerConnection.isConnected() || !socket)
+        // Inneficient, but it is what it is :)
+        bool connected;
+        for (const auto& [publicIp, connectionInfo] : publicIpToPeerConnection)
+        {
+            if (connectionInfo.getPeerEndpoint() == peerEndpoint)
+            {
+                connected = connectionInfo.isConnected();
+                break;
+            }
+        }
+
+        if (!connected || !socket)
         {
             return; // No connection to notify
         }
@@ -830,7 +906,6 @@ void UDPNetwork::shutdown()
     
     // Then shut down the network stack
     running = false;
-    peerConnection.setConnected(false);
     stateManager->setState(SystemState::SHUTTING_DOWN);
 
     stopKeepAliveTimer();

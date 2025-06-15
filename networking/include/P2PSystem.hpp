@@ -75,16 +75,16 @@ private:
     int peerPort;
 
     // State management
-    std::shared_ptr<SystemStateManager> stateManager;
+    std::shared_ptr<ISystemStateManager> stateManager;
     std::thread monitorThread;
     
     // Components
-    NetworkConfigManager networkConfigManager;
-    StunClient stunService;
-    std::unique_ptr<UDPNetwork> networkModule;
-    std::unique_ptr<TunInterface> tunInterface;
+    std::shared_ptr<INetworkConfigManager> networkConfigManager;
+    std::unique_ptr<IStunClient> stunService;
+    std::unique_ptr<IUDPNetwork> networkModule;
+    std::unique_ptr<ITunInterface> tunInterface;
 
-    std::unique_ptr<IPCServer> ipcServer;
+    std::unique_ptr<IIPCServer> ipcServer;
     std::thread ipcServerThread;
 
     // Encryption
@@ -93,4 +93,18 @@ private:
 
     PublicKey publicKey;
     SecretKey secretKey;
+
+
+    /* ====================================================================================================== */
+
+    /*
+    *   TESTING ORIENTED SEAMS
+    */
+public:
+    std::shared_ptr<ISystemStateManager>& stateManagerLRef() { return stateManager; }
+    std::shared_ptr<INetworkConfigManager>& networkConfigLRef() { return networkConfigManager; }
+    std::unique_ptr<IStunClient>& stunClientLRef() { return stunService; }
+    std::unique_ptr<ITunInterface>& tunInterfaceLRef() { return tunInterface; }
+    std::unique_ptr<IUDPNetwork>& networkModuleLRef() { return networkModule; }
+    std::unique_ptr<IIPCServer>& ipcServerLRef() { return ipcServer; }
 }; 

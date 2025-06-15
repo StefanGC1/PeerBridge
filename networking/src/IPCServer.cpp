@@ -8,8 +8,8 @@
 
 // Updated constructor without P2PSystem dependency
 IPCServer::IPCServer(
-    std::shared_ptr<SystemStateManager> stateManager,
-    NetworkConfigManager& networkConfigManager)
+    std::shared_ptr<ISystemStateManager> stateManager,
+    std::shared_ptr<INetworkConfigManager> networkConfigManager)
     : getStunInfoCallback(nullptr)
     , shutdownCallback(nullptr)
     , stateManager(stateManager)
@@ -195,7 +195,7 @@ grpc::Status IPCServer::StartConnection(
         }
     }
 
-    NetworkConfigManager::SetupConfig setupConfig = networkConfigManager.getSetupConfig();
+    NetworkConfigManager::SetupConfig setupConfig = networkConfigManager->getSetupConfig();
     auto peerMap = utils::parsePeerInfo(peerInfo, setupConfig.IP_SPACE, self_index);
 
     if (peerMap.empty())
