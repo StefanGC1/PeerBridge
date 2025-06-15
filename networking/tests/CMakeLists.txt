@@ -3,12 +3,16 @@ cmake_minimum_required(VERSION 3.10)
 
 # Test executable
 add_executable(PeerBridgeNet_tests
-    test_basic.cpp
+    gtest_main.cpp
+    P2PSystem_test.cpp
+    SystemStateManager_test.cpp
 )
 
 # Include directories for tests
 target_include_directories(PeerBridgeNet_tests PRIVATE
     ../include
+    ./
+    mocks/
     ${GTEST_INCLUDE_DIRS}
     ${GMOCK_INCLUDE_DIRS}
 )
@@ -19,6 +23,7 @@ target_link_libraries(PeerBridgeNet_tests PRIVATE
     ${GTEST_LIBRARIES}
     ${GMOCK_LIBRARIES}
     pthread
+    dbghelp
 )
 
 # Add compiler flags for GTest

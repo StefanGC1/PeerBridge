@@ -39,7 +39,7 @@ public:
     // Status
     bool isConnected() const;
     bool isRunning() const;
-    void setRunningFalse();
+    void setRunning(bool);
     
     // Connection monitoring
     void monitorLoop();
@@ -101,6 +101,7 @@ private:
     *   TESTING ORIENTED SEAMS
     */
 public:
+    bool shouldRunMonitorThread = true; // Very much a bandaid fix :(
     std::shared_ptr<ISystemStateManager>& stateManagerLRef() { return stateManager; }
     std::shared_ptr<INetworkConfigManager>& networkConfigLRef() { return networkConfigManager; }
     std::unique_ptr<IStunClient>& stunClientLRef() { return stunService; }

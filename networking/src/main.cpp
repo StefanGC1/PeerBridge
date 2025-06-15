@@ -15,7 +15,7 @@ static std::unique_ptr<P2PSystem> p2pSystem;
 // Signal handler for graceful shutdown
 void signalHandler(int signal)
 {
-    p2pSystem->setRunningFalse();
+    p2pSystem->setRunning(false);
 }
 
 static std::string stackTraceToString()

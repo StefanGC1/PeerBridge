@@ -42,6 +42,7 @@ private:
 };
 
 void initLogging();
+void initTestLogging();
 quill::Logger* sysLogger();
 quill::Logger* netLogger();
 

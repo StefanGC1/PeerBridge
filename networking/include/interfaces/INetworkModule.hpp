@@ -31,9 +31,6 @@ public:
         const boost::asio::ip::udp::endpoint& peerEndpoint,
         const std::array<uint8_t, crypto_box_BEFORENMBYTES>& sharedKey) = 0;
     virtual void setMessageCallback(MessageCallback callback) = 0;
-    
-    // virtual int getLocalPort() const = 0;
-    // virtual std::string getLocalAddress() const = 0;
 
     virtual boost::asio::io_context& getIOContext() = 0;
 };

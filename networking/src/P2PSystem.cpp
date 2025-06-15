@@ -64,6 +64,10 @@ P2PSystem::P2PSystem()
 P2PSystem::~P2PSystem()
 {
     shutdown();
+    if (monitorThread.joinable())
+    {
+        monitorThread.join();
+    }
 }
 
 bool P2PSystem::startIPCServer(const std::string& serverAddress)
@@ -245,14 +249,15 @@ bool P2PSystem::initialize(int localPort)
     */
 
     // Start monitoring loop
-    monitorThread = std::thread([this]()
-    {
-        while (running && !stateManager->isInState(SystemState::SHUTTING_DOWN))
+    if (shouldRunMonitorThread)
+        monitorThread = std::thread([this]()
         {
-            this->monitorLoop();
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        }
-    });
+            while (running && !stateManager->isInState(SystemState::SHUTTING_DOWN))
+            {
+                this->monitorLoop();
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
+        });
 
     SYSTEM_LOG_INFO("[System] P2P System initialized successfully");
     
@@ -481,7 +486,8 @@ void P2PSystem::shutdown()
     }
 
     // Give the IOThread time to stop
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    // COMMENT WHILE TESTING?
+    // std::this_thread::sleep_for(std::chrono::seconds(2));
 
     // Stop the network interface
     stopNetworkInterface();
@@ -514,6 +520,7 @@ void P2PSystem::cleanup()
     {
         monitorThread.join();
     }
+    SYSTEM_LOG_INFO("[System] Resources cleaned up");
 }
 
 // A bit of a bandaid fix :)
@@ -523,7 +530,7 @@ bool P2PSystem::isRunning() const
 }
 
 // A bit of a bandaid fix :)
-void P2PSystem::setRunningFalse()
+void P2PSystem::setRunning(bool value)
 {
-    running = false;
+    running = value;
 }

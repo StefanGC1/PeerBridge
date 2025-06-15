@@ -177,5 +177,20 @@ void initLogging()
     netLogObject = Frontend::create_or_get_logger("net", netSink, shortLogFormat());
 }
 
+void initTestLogging()
+{
+    using namespace quill;
+
+    BackendOptions cfg;
+    cfg.sleep_duration = std::chrono::milliseconds{1};
+    Backend::start(cfg);
+
+    auto console = Frontend::create_or_get_sink<ConsoleSink>(
+        "test_console", dimConsoleColours());
+
+    sysLogObject = Frontend::create_or_get_logger("app", console, shortLogFormat());
+    netLogObject = Frontend::create_or_get_logger("net", console, shortLogFormat());
+}
+
 quill::Logger* sysLogger() { return sysLogObject; }
 quill::Logger* netLogger() { return netLogObject; }
