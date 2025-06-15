@@ -3,6 +3,7 @@ import { join } from 'path';
 import isDev from 'electron-is-dev';
 import { spawn } from 'child_process';
 import { initializeNetworking, getStunInfo, startConnection, stopConnection, cleanup } from './grpc.cjs';
+import keytar from 'keytar';
 
 import path from 'path';
 
@@ -117,6 +118,37 @@ ipcMain.handle('grpc:cleanup', async () => {
   } catch (error) {
     console.error('Error in stopProcess:', error);
     return { error: error.message || 'Failed to stop process' };
+  }
+});
+
+// Keytar IPC handlers for secure token storage
+ipcMain.handle('keytar:setPassword', async (event, service, account, password) => {
+  try {
+    await keytar.setPassword(service, account, password);
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting password:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('keytar:getPassword', async (event, service, account) => {
+  try {
+    const password = await keytar.getPassword(service, account);
+    return password;
+  } catch (error) {
+    console.error('Error getting password:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('keytar:deletePassword', async (event, service, account) => {
+  try {
+    const success = await keytar.deletePassword(service, account);
+    return { success };
+  } catch (error) {
+    console.error('Error deleting password:', error);
+    return { success: false, error: error.message };
   }
 });
 

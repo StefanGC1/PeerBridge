@@ -214,3 +214,34 @@ export async function getPeerInfo(lobbyId) {
     throw error;
   }
 }
+
+export async function refreshToken(refreshTokenValue) {
+  try {
+    // Get STUN info before refresh
+    let stunInfo = { publicIp: '', publicPort: 0, publicKey: [] };
+    try {
+      stunInfo = await window.electron.grpc.getStunInfo();
+      console.log('Got STUN info for refresh:', stunInfo);
+    } catch (stunError) {
+      console.warn('Failed to get STUN info for refresh:', stunError);
+    }
+    
+    const publicKeyArray = Array.from(stunInfo.publicKey);
+    
+    // Create axios instance with refresh token
+    const refreshAxios = axiosInstance.create();
+    refreshAxios.defaults.headers.Authorization = `Bearer ${refreshTokenValue}`;
+    
+    const response = await refreshAxios.post("/api/auth/refresh", {
+      public_ip: stunInfo.publicIp || '',
+      public_port: stunInfo.publicPort || 0,
+      public_key: publicKeyArray || []
+    });
+    
+    console.log('Refresh response:', response);
+    return response.data;
+  } catch (error) {
+    console.warn('Error refreshing token:', error);
+    throw error;
+  }
+}

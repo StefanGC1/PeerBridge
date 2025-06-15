@@ -11,5 +11,14 @@ contextBridge.exposeInMainWorld('electron', {
     stopConnection: () => ipcRenderer.invoke('grpc:stopConnection'),
     cleanup: () => ipcRenderer.invoke('grpc:cleanup'),
   },
+  // For secure token storage
+  keytar: {
+    setPassword: (service, account, password) => 
+      ipcRenderer.invoke('keytar:setPassword', service, account, password),
+    getPassword: (service, account) => 
+      ipcRenderer.invoke('keytar:getPassword', service, account),
+    deletePassword: (service, account) => 
+      ipcRenderer.invoke('keytar:deletePassword', service, account),
+  },
   // We can add more APIs here as needed
 });

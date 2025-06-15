@@ -28,6 +28,12 @@ target_link_libraries(PeerBridgeNet_tests PRIVATE
     dbghelp
 )
 
+# Add coverage flags if enabled
+if(ENABLE_COVERAGE)
+    target_compile_options(PeerBridgeNet_tests PRIVATE --coverage -g -O0)
+    target_link_libraries(PeerBridgeNet_tests PRIVATE --coverage)
+endif()
+
 # Add compiler flags for GTest
 target_compile_options(PeerBridgeNet_tests PRIVATE ${GTEST_CFLAGS_OTHER})
 

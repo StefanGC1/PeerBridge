@@ -406,13 +406,6 @@ bool UDPNetwork::sendMessage(
             return false;
         }
 
-        // size_t packetSize = 16 + dataToSend.size();
-        // if (packetSize > MAX_PACKET_SIZE)
-        // {
-        //     NETWORK_LOG_ERROR("[Network] Message too large, max size is {}", (MAX_PACKET_SIZE - 16));
-        //     return false;
-        // }
-
         // Create packet with shared ownership for async operation
         auto packet = std::make_shared<std::vector<uint8_t>>(wholePacketSize);
 
@@ -711,10 +704,6 @@ void UDPNetwork::processReceivedData(
                         NETWORK_LOG_ERROR("[Network] Error sending ACK: {} (code: {})", error.message(), error.value());
                     }
                 });
-
-            // Extract wintun packet
-            // std::vector<uint8_t> tunPacket(winTunPacketSize);
-            // std::memcpy(tunPacket.data(), buffer.data() + 16, winTunPacketSize);
 
             // Packet pointer position helpers for decryption
             uint8_t* basePos = receiveBuffer->data();

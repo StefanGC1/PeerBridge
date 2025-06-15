@@ -5,6 +5,7 @@ from .models import User
 from .schemas import OnlineUser, Lobby
 from flask_jwt_extended import (
     create_access_token,
+    create_refresh_token,
     jwt_required,
     get_jwt_identity
 )
@@ -59,9 +60,11 @@ def register():
     online_user.save_to_redis(expire_seconds=60)  # 60 seconds initial TTL
 
     access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=12))
+    refresh_token = create_refresh_token(identity=user.id, expires_delta=timedelta(days=30))
     return jsonify({
         "message": f"User {user_id} registered",
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "user_id": user_id,
         "username": username
     }), 201
@@ -109,9 +112,11 @@ def login():
     online_user.save_to_redis(expire_seconds=60)  # 60 seconds initial TTL
 
     access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=12))
+    refresh_token = create_refresh_token(identity=user.id, expires_delta=timedelta(days=30))
     return jsonify({
         "message": f"User {user_id} logged in",
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "user_id": user_id,
         "username": username
     }), 200
@@ -528,4 +533,52 @@ def get_peer_info(lobby_id):
     return jsonify({
         "peers": peers,
         "self_index": self_index
+    }), 200
+
+@bp.route("/auth/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh_token():
+    current_user_id = get_jwt_identity()
+    
+    user = User.query.get(current_user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json() or {}
+    
+    # Get STUN info if provided, or use defaults
+    try:
+        user_ip = data.get('public_ip', '')
+        user_port = int(data.get('public_port', 0))
+        public_key = data.get('public_key', [])
+    except (ValueError, TypeError) as e:
+        current_app.logger.warning(f"Invalid STUN port format: {e}. Using default.")
+        user_ip = data.get('public_ip', '')
+        user_port = 0
+        public_key = []
+
+    public_key = bytes(public_key)
+
+    # Update user in Redis if STUN info provided
+    if user_ip or user_port or public_key:
+        current_app.logger.debug(f"User {user.username} (ID: {current_user_id}) refreshed with STUN info - "
+                                 f"IP: {user_ip}, Port: {user_port}, "
+                                 f"Public Key: {public_key[:5].hex() if public_key else 'None'}")
+        
+        # Store user in Redis using OnlineUser class
+        online_user = OnlineUser(
+            user_id=current_user_id,
+            ip=user_ip,
+            port=user_port,
+            public_key=public_key
+        )
+        online_user.save_to_redis(expire_seconds=60)
+
+    # Create new access token
+    new_access_token = create_access_token(identity=current_user_id, expires_delta=timedelta(hours=12))
+    
+    return jsonify({
+        "access_token": new_access_token,
+        "user_id": current_user_id,
+        "username": user.username
     }), 200

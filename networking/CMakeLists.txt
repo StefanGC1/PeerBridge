@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add test options
 option(BUILD_TESTS "Build the tests" ON)
+option(ENABLE_COVERAGE "Enable code coverage" OFF)
 
 find_package(Boost REQUIRED COMPONENTS system filesystem thread stacktrace_windbg)
 find_package(PkgConfig REQUIRED)
@@ -106,6 +107,12 @@ set(PROTO_SOURCES ${GENERATED_PROTO_SRCS})
 
 # Create the library
 add_library(PeerBridgeNetLib STATIC ${LIB_SOURCES} ${PROTO_SOURCES})
+
+# Add coverage flags if enabled
+if(ENABLE_COVERAGE)
+    target_compile_options(PeerBridgeNetLib PUBLIC --coverage -g -O0 -fprofile-arcs -ftest-coverage)
+    target_link_libraries(PeerBridgeNetLib PUBLIC --coverage)
+endif()
 
 # Include directories for the library
 target_include_directories(PeerBridgeNetLib PUBLIC

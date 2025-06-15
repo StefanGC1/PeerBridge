@@ -5,6 +5,7 @@ import { LobbyProvider } from '../../contexts/LobbyContext';
 import LobbyIndicator from '../lobby/LobbyIndicator';
 import { Home, Users, Settings as SettingsIcon, Info, LogOut, Moon, Sun } from 'lucide-react';
 import { stopSocket } from '../../lib/socket';
+import { tokenManager } from '../../lib/token';
 const SidebarIcon = ({ icon, tooltip, active, onClick }) => {
   return (
     <div className={`sidebar-icon ${active ? 'bg-primary text-primary-foreground' : ''}`} onClick={onClick}>
@@ -20,9 +21,10 @@ function MainLayout() {
   const { theme, toggleTheme } = useTheme();
   
   // Handle exit/logout
-  const handleExit = () => {
+  const handleExit = async () => {
     // Clear auth data
-    localStorage.removeItem('user');
+    tokenManager.clearUserData();
+    await tokenManager.removeRefreshToken();
     stopSocket();
     // Navigate to landing
     navigate('/');

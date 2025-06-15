@@ -4,6 +4,7 @@ import { Eye, EyeOff, ArrowLeft, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { login } from '../../lib/api';
 import { initializeSocket } from '../../lib/socket';
+import { tokenManager } from '../../lib/token';
 import logo from '../../assets/logo.png';
 
 function Login() {
@@ -12,6 +13,7 @@ function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -21,8 +23,15 @@ function Login() {
     setIsLoading(true);
     
     try {
-      const userData = await login(username, password)
-      localStorage.setItem('user', JSON.stringify(userData));
+      const userData = await login(username, password);
+      
+      // Store user data in localStorage (access token)
+      tokenManager.storeUserData(userData);
+      
+      // Store refresh token in keychain if remember me is checked
+      if (rememberMe && userData.refresh_token) {
+        await tokenManager.storeRefreshToken(userData.refresh_token);
+      }
       
       // Initialize socket connection
       initializeSocket();
@@ -30,7 +39,7 @@ function Login() {
       // Navigate to the app
       navigate('/app/lobby');
     } catch (err) {
-      setError(err.response.data.error || 'Failed to login. Please check your credentials.');
+      setError(err.response?.data?.error || 'Failed to login. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -122,6 +131,8 @@ function Login() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 border-border rounded text-primary focus:ring-primary"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-foreground">

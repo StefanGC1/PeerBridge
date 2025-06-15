@@ -4,6 +4,7 @@ import { Eye, EyeOff, ArrowLeft, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { register } from '../../lib/api';
 import { initializeSocket } from '../../lib/socket';
+import { tokenManager } from '../../lib/token';
 import logo from '../../assets/logo.png';
 
 function Register() {
@@ -13,6 +14,7 @@ function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -30,7 +32,14 @@ function Register() {
     
     try {
       const userData = await register(username, password);
-      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Store user data in localStorage (access token)
+      tokenManager.storeUserData(userData);
+      
+      // Store refresh token in keychain if remember me is checked
+      if (rememberMe && userData.refresh_token) {
+        await tokenManager.storeRefreshToken(userData.refresh_token);
+      }
       
       // Initialize socket connection
       initializeSocket();
@@ -139,6 +148,22 @@ function Register() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="input-field pr-10"
                   />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 border-border rounded text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 block text-sm text-foreground">
+                    Remember me
+                  </label>
                 </div>
               </div>
 
