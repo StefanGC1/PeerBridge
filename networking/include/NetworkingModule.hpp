@@ -55,7 +55,8 @@ class UDPNetwork : public IUDPNetwork
 {
 public:
     // Packet types
-    enum class PacketType : uint8_t {
+    enum class PacketType : uint8_t
+    {
         HOLE_PUNCH = 0x01,
         HEARTBEAT = 0x02,
         MESSAGE = 0x03,

@@ -360,7 +360,7 @@ def update_lobby(lobby_id):
     
     return jsonify(lobby.to_dict()), 200
 
-@bp.route("/lobbies/delete-lobby/<lobby_id>", methods=["POST"])
+@bp.route("/lobbies/delete-lobby/<lobby_id>", methods=["DELETE"])
 @jwt_required()
 def delete_lobby(lobby_id):
     current_user_id = get_jwt_identity()

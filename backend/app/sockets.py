@@ -132,7 +132,8 @@ def _handle_leave_lobby(user_id):
                 # If there are no members left, delete the lobby
                 if not lobby.members:
                     current_app.redis_client.delete(f"lobby:{lobby_id}")
-                    socketio.emit('lobby_deleted', {"lobby_id": lobby_id}, room=f"lobby_{lobby_id}")
+                    socketio.emit('lobby_deleted',
+                        {"lobby_id": lobby_id}, room=f"lobby_{lobby_id}")
                 else:
                     # Otherwise, save the updated lobby
                     lobby.save_to_redis()

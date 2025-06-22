@@ -165,7 +165,7 @@ export async function updateLobby(lobbyId, settings) {
 
 export async function deleteLobby(lobbyId) {
   try {
-    const response = await axiosInstance.post(`/api/lobbies/delete-lobby/${lobbyId}`);
+    const response = await axiosInstance.delete(`/api/lobbies/delete-lobby/${lobbyId}`);
     return response.data;
   } catch (error) {
     console.warn('Error deleting lobby:', error);
