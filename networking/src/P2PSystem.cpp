@@ -305,7 +305,7 @@ void P2PSystem::handleNetworkEvent(const NetworkEventData& event)
             if (currentState == SystemState::CONNECTING) 
             {
                 if (!startNetworkInterface()) {
-                    SYSTEM_LOG_ERROR("[System] Failed to start network interface");\
+                    SYSTEM_LOG_ERROR("[System] Failed to start network interface");
                     stopConnection();
                     break;
                 }
